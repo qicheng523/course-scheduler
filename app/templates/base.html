@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <!-- 手机屏幕也能正常显示，答辩时用投屏不会挤成一团 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}课表排程器{% endblock %}</title>
+
+  <!-- 三个资源全部是本地文件，不引用 CDN：答辩现场断网也不会掉样式 -->
+  <link rel="stylesheet" href="/static/pico.min.css">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+  <!-- 顶部导航：Pico.css 会自动把 nav 里的 ul 排成左右两侧 -->
+  <header class="container">
+    <nav>
+      <ul>
+        <li><strong>课表排程器</strong></li>
+      </ul>
+      <ul>
+        <li><a href="/">首页</a></li>
+        <li><a href="/health">健康检查</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="container">
+    <small>骨架版本 v{{ version }} · 数据库文件：{{ db_path }}</small>
+  </footer>
+</body>
+</html>

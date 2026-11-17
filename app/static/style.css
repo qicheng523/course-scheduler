@@ -1,0 +1,25 @@
+/* 自定义样式：只做少量补充，主体排版交给 Pico.css。
+   Pico.css 的原则是"语义化 HTML 自动变好看"，所以 CSS 越少越好维护。 */
+
+/* 内容区顶部留一点呼吸空间 */
+main.container {
+  padding-top: 1.5rem;
+}
+
+/* HTMX 返回值显示区：换成等宽字体，方便看清 {"ok": true} 这种 JSON */
+#htmx-result {
+  margin-top: 1rem;
+  font-family: ui-monospace, Consolas, "Courier New", monospace;
+  font-weight: 600;
+  color: #2c7a4b;
+}
+
+/* 表格最后一列（操作列 / 状态列）不换行，避免按钮被挤成两行 */
+article table td:last-child {
+  white-space: nowrap;
+}
+
+/* 页脚文字淡一点，不抢注意力 */
+footer small {
+  color: #6b7280;
+}

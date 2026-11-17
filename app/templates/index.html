@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}首页 · 课表排程器{% endblock %}
+
+{% block content %}
+  <h1>骨架已启动</h1>
+
+  <p>
+    今天的目标只有一个：确认技术栈四件套全部通电。
+    下面四项都能正常显示，就说明环境没问题，可以开始写业务功能。
+  </p>
+
+  <article>
+    <table>
+      <thead>
+        <tr>
+          <th>组件</th>
+          <th>检查项</th>
+          <th>状态</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>FastAPI</td>
+          <td>接口 <code>GET /health</code> 返回 <code>{"ok": true}</code></td>
+          <td><a href="/health">点我验证</a></td>
+        </tr>
+        <tr>
+          <td>Jinja2</td>
+          <td>你现在看到的这个页面，就是模板渲染出来的</td>
+          <td>[OK]</td>
+        </tr>
+        <tr>
+          <td>Pico.css</td>
+          <td>表格有边框、按钮有圆角，说明样式文件已生效</td>
+          <td>[OK]</td>
+        </tr>
+        <tr>
+          <td>HTMX</td>
+          <td>点下面的按钮，不刷新页面就能拿到接口返回</td>
+          <td>
+            <button
+              hx-get="/health"
+              hx-target="#htmx-result"
+              hx-swap="innerHTML">
+              点我测试
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- HTMX 把这个 div 的内容替换成接口返回值 -->
+    <div id="htmx-result">（HTMX 的返回值会出现在这里）</div>
+  </article>
+
+  <article>
+    <h2>明天开始做什么</h2>
+    <p>
+      骨架通了，下一步是数据：课程表（星期几、第几节、课程名、地点）。
+      先能手动加课，再谈"算空闲时间"。
+    </p>
+  </article>
+{% endblock %}
