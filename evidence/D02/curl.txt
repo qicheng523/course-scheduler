@@ -1,0 +1,96 @@
+# D02 验收证据 · 课程接口（curl）
+
+> 生成时间：2026-11-18 08:3x
+> 环境：Windows PowerShell 5.1 · `python -m uvicorn app.main:app` · 端口 8000 · 空库（先删 `data/app.db`）
+> 说明：PowerShell 5.1 把中文 JSON 直接写在命令行里会变成问号、引号会被吃掉，
+> 所以 POST 的 body 先写成 **UTF-8（无 BOM）文件**，再用 `--data-binary "@文件名"` 传。
+
+---
+
+## ① 查课程（空库）
+
+```powershell
+curl.exe -sS -w "`n[HTTP %{http_code}]`n" "http://127.0.0.1:8000/api/courses?term=2026f"
+```
+
+```text
+{"items":[],"total":0}
+[HTTP 200]
+```
+
+## ② 加一门课
+
+```powershell
+curl.exe -sS -w "`n[HTTP %{http_code}]`n" -X POST "http://127.0.0.1:8000/api/courses" -H "Content-Type: application/json" --data-binary "@body-add.json"
+```
+
+```text
+{"id":1,"name":"高等数学AI","weekday":1,"start":"08:00","end":"09:40","location":"1-0206"}
+[HTTP 201]
+```
+
+## ③ 失败场景 A：时间重叠 → 409（detail 带冲突课程名）
+
+```powershell
+curl.exe -sS -w "`n[HTTP %{http_code}]`n" -X POST "http://127.0.0.1:8000/api/courses" -H "Content-Type: application/json" --data-binary "@body-conflict.json"
+```
+
+```text
+{"detail":"这门课和「高等数学AI」时间冲突"}
+[HTTP 409]
+```
+
+## ④ 再查一次（证明课真写进了库）
+
+```powershell
+curl.exe -sS -w "`n[HTTP %{http_code}]`n" "http://127.0.0.1:8000/api/courses?term=2026f"
+```
+
+```text
+{"items":[{"id":1,"name":"高等数学AI","weekday":1,"start":"08:00","end":"09:40","location":"1-0206"}],"total":1}
+[HTTP 200]
+```
+
+## ⑤ 失败场景 B：星期 = 6 → 422
+
+```powershell
+curl.exe -sS -w "`n[HTTP %{http_code}]`n" -X POST "http://127.0.0.1:8000/api/courses" -H "Content-Type: application/json" --data-binary "@body-badweekday.json"
+```
+
+```text
+{"detail":"星期只能是 1 到 5（周六周日没有课）"}
+[HTTP 422]
+```
+
+## ⑥ 失败场景 C：结束早于开始 → 422
+
+```powershell
+curl.exe -sS -w "`n[HTTP %{http_code}]`n" -X POST "http://127.0.0.1:8000/api/courses" -H "Content-Type: application/json" --data-binary "@body-badtime.json"
+```
+
+```text
+{"detail":"结束时间必须晚于开始时间"}
+[HTTP 422]
+```
+
+---
+
+## 演示用的 3 个 JSON 文件
+
+`body-add.json`（加课）：
+
+```json
+{"name":"高等数学AI","weekday":1,"start":"08:00","end":"09:40","location":"1-0206"}
+```
+
+`body-conflict.json`（和上面重叠）：
+
+```json
+{"name":"线性代数","weekday":1,"start":"09:00","end":"10:30","location":"1-0206"}
+```
+
+`body-badweekday.json`（星期 6）：
+
+```json
+{"name":"周末课","weekday":6,"start":"10:00","end":"11:00"}
+```

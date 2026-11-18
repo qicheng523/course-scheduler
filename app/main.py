@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import __version__
 from app.db import DB_PATH, create_db_and_tables
+from app.routers import courses
 
 # 各个目录的绝对路径：一律用绝对路径，避免"换个目录启动就找不到模板"的坑
 BASE_DIR = Path(__file__).resolve().parent
@@ -37,6 +38,9 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # 模板引擎：渲染 app/templates/ 下的 .html 文件
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+# 把课程接口挂上来：/api/courses 的增删改查都在 app/routers/courses.py 里
+app.include_router(courses.router)
 
 
 @app.get("/health")
