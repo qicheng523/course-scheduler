@@ -1,0 +1,10 @@
+# 接口验证（seed 灌入 19 条之后）
+# 复现：先 python scripts/seed.py，再起服务，然后跑下面的 curl
+
+GET /health
+{"ok":true}
+[HTTP 200]
+
+GET /api/courses?term=2026f  （期望 total=19，字段与 docs/API.md §3 一致）
+{"items":[{"id":1,"name":"中国近现代史纲要","weekday":1,"start":"08:00","end":"09:40","location":"28-A303"},{"id":2,"name":"体育I","weekday":1,"start":"10:10","end":"11:50","location":"体育馆主馆1-6号羽毛球场"},{"id":3,"name":"高等数学AI","weekday":1,"start":"14:00","end":"15:40","location":"1-0206"},{"id":4,"name":"程序设计（C语言）","weekday":1,"start":"16:10","end":"17:50","location":"28-A203"},{"id":5,"name":"专业英语听说写I","weekday":2,"start":"08:00","end":"09:40","location":"28-B103"},{"id":6,"name":"高等数学AI","weekday":2,"start":"10:10","end":"11:50","location":"1-0206"},{"id":7,"name":"线性代数","weekday":2,"start":"14:00","end":"15:40","location":"1-0206"},{"id":8,"name":"程序设计（C语言）","weekday":2,"start":"16:10","end":"17:50","location":"28-A203"},{"id":9,"name":"线性代数","weekday":3,"start":"08:00","end":"09:40","location":"1-0206"},{"id":10,"name":"程序设计（C语言）","weekday":3,"start":"10:10","end":"11:50","location":"28-A203"},{"id":11,"name":"中国近现代史纲要","weekday":3,"start":"14:00","end":"15:40","location":"28-A303"},{"id":12,"name":"程序设计（C语言）","weekday":4,"start":"08:00","end":"09:40","location":"28-A203"},{"id":13,"name":"高等数学AI","weekday":4,"start":"10:10","end":"11:50","location":"1-0206"},{"id":14,"name":"中国近现代史纲要","weekday":4,"start":"14:00","end":"15:40","location":"28-A303"},{"id":15,"name":"大学英语I","weekday":4,"start":"16:10","end":"17:50","location":"28-B107"},{"id":16,"name":"高等数学AI","weekday":5,"start":"08:00","end":"09:40","location":"1-2016"},{"id":17,"name":"大学英语I","weekday":5,"start":"10:10","end":"11:50","location":"28-B107"},{"id":18,"name":"专业英语听说写I","weekday":5,"start":"14:00","end":"15:40","location":"28-B103"},{"id":19,"name":"军事理论","weekday":5,"start":"16:10","end":"17:50","location":"28-A205"}],"total":19}
+[HTTP 200]
