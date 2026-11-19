@@ -1,0 +1,17 @@
+# B 本地复跑（D3 · 2026-11-19）——CI 上线前的基线
+
+===== python -m pytest -q =====
+.................                                                        [100%]
+17 passed in 1.72s
+
+===== python scripts/check_env.py =====
+Python 版本：3.12.10
+[OK] fastapi    FastAPI 框架
+[OK] uvicorn    启动网站的服务器
+[OK] sqlmodel   数据库表 + 数据模型
+[OK] jinja2     HTML 模板引擎
+[OK] multipart  表单处理（python-multipart）
+[OK] pytest     测试框架
+[OK] httpx2     测试客户端的底层依赖
+
+全部就绪，启动命令：python -m uvicorn app.main:app --reload

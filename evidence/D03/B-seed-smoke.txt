@@ -1,0 +1,13 @@
+===== 按 CI 第 4 步顺序本地预演 =====
+$ python scripts/reset_db.py --yes
+旧数据库已删除：C:\wangpan\Microsoft VS Code\xiangmu\coruse-scheduler\data\app.db
+已重建空库（只有表结构，没有数据）。
+下一步：python scripts/seed.py 灌入演示数据
+
+$ python scripts/seed.py
+[3/3] 数据库：C:\wangpan\Microsoft VS Code\xiangmu\coruse-scheduler\data\app.db
+
+灌完了。启动网站后打开 http://127.0.0.1:8000/api/courses 应该看到 total=19。
+
+$ python -c 核对条数
+seed OK：course=19 fixed_event=35
