@@ -64,3 +64,12 @@ def index(request: Request):
             "db_path": str(DB_PATH),
         },
     )
+
+@app.get("/courses", response_class=HTMLResponse)
+def courses_page(request: Request):
+    """课程页：模板由 A 负责，页面数据由 A 用 HTMX 调 /api/courses 拿。"""
+    return templates.TemplateResponse(
+        request=request,
+        name="courses.html",
+        context={"version": __version__, "db_path": str(DB_PATH), "courses": []},
+    )
