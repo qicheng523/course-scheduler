@@ -1,0 +1,10 @@
+PS D:\dsh-workspaces\课表排程工作区> .venv\Scripts\python.exe scripts/reset_db.py --yes
+旧数据库已删除：D:\dsh-workspaces\课表排程工作区\data\app.db
+已重建空库（只有表结构，没有数据）。
+下一步：python scripts/seed.py 灌入演示数据
+PS D:\dsh-workspaces\课表排程工作区> .venv\Scripts\python.exe scripts/seed.py
+[1/3] 清掉旧数据：课程 0 条、固定事件 0 条
+[2/3] 写入：课程 19 条、固定事件 35 条
+[3/3] 数据库：D:\dsh-workspaces\课表排程工作区\data\app.db
+
+灌完了。启动网站后打开 http://127.0.0.1:8000/api/courses 应该看到 total=19。
