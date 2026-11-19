@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import __version__
 from app.db import DB_PATH, create_db_and_tables
-from app.routers import courses
+from app.routers import courses, plan
 
 # 各个目录的绝对路径：一律用绝对路径，避免"换个目录启动就找不到模板"的坑
 BASE_DIR = Path(__file__).resolve().parent
@@ -41,6 +41,9 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 # 把课程接口挂上来：/api/courses 的增删改查都在 app/routers/courses.py 里
 app.include_router(courses.router)
+
+# 把空闲段接口挂上来：/api/slots 在 app/routers/plan.py 里
+app.include_router(plan.router)
 
 
 @app.get("/health")

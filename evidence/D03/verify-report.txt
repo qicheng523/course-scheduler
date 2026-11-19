@@ -1,0 +1,24 @@
+D3 验收报告（tools/verify_d03.py 自动生成）
+
+[A] A1 FAIL 课程页模板 courses.html 存在  —— 文件不存在
+[A] A2 FAIL 模板在请求 /api/courses  —— 模板还没建
+[A] A3 FAIL 表单字段齐全（name/weekday/start/end）  —— 模板还没建
+[A] A4 FAIL 导航里有指向 /courses 的链接  —— base.html 里要有 href="/courses"
+[A] A5 FAIL GET /courses 返回 200  —— TemplateNotFound: 'courses.html' not found in search path: 'D:\\dsh-workspaces\\课表排程工作区\\app\\templa
+[B] B1 PASS seed.py 和 reset_db.py 都在
+[B] B2 PASS 19 门课，且同一天没有时间重叠  —— 19 门
+[B] B3 PASS 固定事件与冻结清单一致（35 条）  —— 35 条
+[B] B4 PASS 真库已灌数据：课程 19 / 固定事件 35  —— course=19 fixed_event=35
+[C] C1 PASS app/services/slots.py 存在
+[C] C2 PASS plan.py 里有 /api/slots 路由
+[C] C3 PASS test_slots.py 至少 6 个测试  —— 10 个
+[S] S1 PASS 答案表的独立实现自检（防止答案抄错）
+[C] C4 PASS 场景1 周四·只有课 → 7 段  —— 7 段
+[C] C5 PASS 场景2 周四·课+固定事件 → 5 段  —— 5 段
+[C] C6 PASS 场景3 周六·只有课 → 1 整段  —— 1 段
+[C] C7 PASS 场景4 周六·课+固定事件 → 2 段  —— 2 段
+[C] C8 PASS 场景5 周日·课+固定事件 → 1 整段  —— 1 段
+[C] C9 PASS pytest 全绿且 ≥13 passed  —— passed=17 failed=0；17 passed in 1.56s
+[C] C10 PASS 真库（灌过 seed）周四 = 场景2 的 5 段
+
+合计：PASS 15 / FAIL 5 / WARN 0

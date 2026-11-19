@@ -1,0 +1,14 @@
+# /api/slots 证据（真库：19 课 + 35 条固定事件）
+# 生成：2026-11-19 · 端口 8000
+
+PS> python -c "import json,urllib.request as u;d=json.load(u.urlopen('http://127.0.0.1:8000/api/slots?date=2026-11-19'));print(d['total'],[(i['start'],i['end'],i['kind']) for i in d['items']])"
+5 [('09:40', '10:10', 'free'), ('15:40', '16:10', 'free'), ('18:30', '18:50', 'free'), ('19:00', '21:00', 'evening'), ('21:10', '21:30', 'free')]
+
+PS> python -c "import json,urllib.request as u;d=json.load(u.urlopen('http://127.0.0.1:8000/api/slots?date=2026-11-21'));print(d['total'],[(i['start'],i['end'],i['kind']) for i in d['items']])"
+2 [('07:30', '09:00', 'free'), ('11:30', '21:30', 'free')]
+
+PS> python -c "import json,urllib.request as u;d=json.load(u.urlopen('http://127.0.0.1:8000/api/slots?date=2026-11-22'));print(d['total'],[(i['start'],i['end'],i['kind']) for i in d['items']])"
+1 [('07:30', '21:30', 'free')]
+
+PS> curl.exe -sS -w "[HTTP %{http_code}]" "http://127.0.0.1:8000/api/slots?date=2026/11/19"
+{"detail":"日期要写成 2026-11-19 这样的格式"}[HTTP 422]
