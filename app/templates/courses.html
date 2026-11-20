@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}课程表 · 课表排程器{% endblock %}
+
+{% block content %}
+<h1>课程表</h1>
+<p>这里是 2026 秋季学期（<code>2026f</code>）的课程。加课、删课会立刻保存到数据库。</p>
+
+<!-- 提示条：平时隐藏，操作成功 / 失败时显示一句话 -->
+<p id="message" hidden></p>
+
+<h2>已录入的课程</h2>
+<table class="courses-table">
+  <thead>
+    <tr>
+      <th>星期</th>
+      <th>课程名</th>
+      <th>时间</th>
+      <th>地点</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody id="course-rows">
+    <tr><td colspan="5">正在加载……</td></tr>
+  </tbody>
+</table>
+
+<h2>添加一门课</h2>
+<form id="course-form">
+  <div class="grid">
+    <label>
+      课程名
+      <input type="text" id="name" maxlength="40" required placeholder="例如：高等数学AI">
+    </label>
+    <label>
+      星期
+      <select id="weekday" required>
+        <option value="1">周一</option>
+        <option value="2">周二</option>
+        <option value="3">周三</option>
+        <option value="4">周四</option>
+        <option value="5">周五</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="grid">
+    <label>
+      开始时间
+      <input type="time" id="start" required value="08:00">
+    </label>
+    <label>
+      结束时间
+      <input type="time" id="end" required value="09:40">
+    </label>
+    <label>
+      地点（可不填）
+      <input type="text" id="location" maxlength="40" placeholder="例如：28-A303">
+    </label>
+  </div>
+
+  <button type="submit">保存这门课</button>
+</form>
+
+<script>
+  // ---------------------------------------------------------------
+  // 这个页面怎么拿数据：
+  // 下面的 JS 用浏览器自带的 fetch 去问后台 /api/courses 要 JSON，
+  // 再把它变成表格里的行。不需要装任何东西。
+  // 字段名严格按 docs/API.md：name / weekday / start / end / location。
+  // ---------------------------------------------------------------
+
+  const TERM = "2026f";
+  const WEEKDAY_NAMES = { 1: "周一", 2: "周二", 3: "周三", 4: "周四", 5: "周五" };
+
+  const rows = document.getElementById("course-rows");
+  const message = document.getElementById("message");
+  const form = document.getElementById("course-form");
+
+  // 在页面上方显示一句话：红色 = 失败，绿色 = 成功
+  function showMessage(text, isError) {
+    message.hidden = false;
+    message.textContent = text;
+    message.style.color = isError ? "#b42318" : "#2c7a4b";
+  }
+
+  // 给表格的一行加一格文字。
+  // label 是手机上用的列名（data-label）：在 375px 下 CSS 会把它显示在每格左边。
+  function addCell(tr, text, label) {
+    const td = document.createElement("td");
+    td.textContent = text;
+    if (label) {
+      td.setAttribute("data-label", label);
+    }
+    tr.appendChild(td);
+    return td;
+  }
+
+  // 从后台拿课程列表，重新画整张表
+  async function loadCourses() {
+    rows.replaceChildren();
+    const loadingRow = document.createElement("tr");
+    addCell(loadingRow, "正在加载……");
+    rows.appendChild(loadingRow);
+
+    let response;
+    try {
+      response = await fetch("/api/courses?term=" + TERM);
+    } catch (error) {
+      rows.replaceChildren();
+      showMessage("连不上后台，请确认网站还在运行", true);
+      return;
+    }
+
+    if (!response.ok) {
+      rows.replaceChildren();
+      showMessage("课程列表加载失败（状态码 " + response.status + "）", true);
+      return;
+    }
+
+    const data = await response.json();
+    rows.replaceChildren();
+
+    // 数据库里还没有课：显示一行提示，不是错误
+    if (data.total === 0) {
+      const emptyRow = document.createElement("tr");
+      const td = addCell(emptyRow, "还没有课程。用下面的表单添加第一门课吧。");
+      td.colSpan = 5;
+      rows.appendChild(emptyRow);
+      return;
+    }
+
+    for (const course of data.items) {
+      const tr = document.createElement("tr");
+      addCell(tr, WEEKDAY_NAMES[course.weekday] || ("星期" + course.weekday), "星期");
+      addCell(tr, course.name, "课程名");
+      addCell(tr, course.start + " - " + course.end, "时间");
+      addCell(tr, course.location || "—", "地点");
+
+      const actionCell = document.createElement("td");
+      actionCell.className = "cell-action";
+      actionCell.setAttribute("data-label", "操作");
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.textContent = "删除";
+      deleteButton.className = "secondary outline";
+      deleteButton.addEventListener("click", function () {
+        deleteCourse(course);
+      });
+      actionCell.appendChild(deleteButton);
+      tr.appendChild(actionCell);
+
+      rows.appendChild(tr);
+    }
+  }
+
+  // 删除一门课：先弹窗确认，再调 DELETE
+  async function deleteCourse(course) {
+    const ok = confirm("确定删除「" + course.name + "」吗？");
+    if (!ok) {
+      return;
+    }
+
+    let response;
+    try {
+      response = await fetch("/api/courses/" + course.id, { method: "DELETE" });
+    } catch (error) {
+      showMessage("连不上后台，请确认网站还在运行", true);
+      return;
+    }
+
+    if (response.status === 204) {
+      showMessage("已删除「" + course.name + "」", false);
+      loadCourses();
+      return;
+    }
+
+    const data = await response.json().catch(function () { return {}; });
+    showMessage(data.detail || "删除失败（状态码 " + response.status + "）", true);
+  }
+
+  // 提交表单：把输入框里的内容变成 JSON，POST 给后台
+  form.addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    const payload = {
+      name: document.getElementById("name").value.trim(),
+      weekday: Number(document.getElementById("weekday").value),
+      start: document.getElementById("start").value,
+      end: document.getElementById("end").value,
+      location: document.getElementById("location").value.trim() || null
+    };
+
+    let response;
+    try {
+      response = await fetch("/api/courses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    } catch (error) {
+      showMessage("连不上后台，请确认网站还在运行", true);
+      return;
+    }
+
+    // 201 = 新增成功：清空表单，重新画表
+    if (response.status === 201) {
+      form.reset();
+      showMessage("已保存「" + payload.name + "」", false);
+      loadCourses();
+      return;
+    }
+
+    // 其他状态码：把后台给的中文说明原样显示出来
+    // （比如 409「这门课和「高等数学AI」时间冲突」）
+    const data = await response.json().catch(function () { return {}; });
+    let detail = data.detail;
+    if (typeof detail !== "string") {
+      detail = "提交失败（状态码 " + response.status + "），请检查输入";
+    }
+    showMessage(detail, true);
+  });
+
+  // 页面一打开就加载课程
+  loadCourses();
+</script>
+{% endblock %}

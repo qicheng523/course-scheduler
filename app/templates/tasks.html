@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+
+{% block title %}任务配额 · 课表排程器{% endblock %}
+
+{% block content %}
+<div class="quota-page">
+  <h1>任务配额</h1>
+  <p>给 5 类任务分配每周时间。改任意一格，下面的总预算会立刻重新相加。</p>
+
+  <!-- 后端还没有 /api/tasks 时显示这条提示，不影响页面使用 -->
+  <p id="draft-notice" class="quota-notice" hidden>
+    后端还没有 <code>/api/tasks</code> 接口，下面是示例配额。等 C 加好接口，这里会自动换成真实数据。
+  </p>
+
+  <!-- 保存成功 / 失败的一句话 -->
+  <p id="message" role="status" aria-live="polite" hidden></p>
+
+  <!-- 三态之一：加载中 -->
+  <div id="loading-state" class="state-box" aria-busy="true">
+    <p>正在加载任务配额…</p>
+  </div>
+
+  <!-- 三态之二：出错 -->
+  <div id="error-state" class="state-box" role="alert" hidden>
+    <p id="error-text">加载失败了。</p>
+    <button type="button" id="retry-button">重试</button>
+  </div>
+
+  <!-- 三态之三：接口返回空列表 -->
+  <div id="empty-state" class="state-box" hidden>
+    <p>还没有任何任务类别的配额。</p>
+    <button type="button" id="fill-default-button">填入 5 类默认配额</button>
+  </div>
+
+  <!-- 5 类任务的配额卡（由下面的 JS 生成） -->
+  <div id="quota-list" class="quota-list" hidden></div>
+
+  <!-- 底部固定条：总预算 + 保存 -->
+  <div id="quota-actions" class="quota-actions" hidden>
+    <div class="quota-total">
+      总预算 <span id="total-minutes">0</span> 分钟
+      <small id="total-human">0 小时</small>
+    </div>
+    <button type="button" id="save-button">保存配额</button>
+  </div>
+</div>
+
+<script>
+  // ---------------------------------------------------------------
+  // 任务配额页逻辑。
+  // 现在后端还没有 GET / PUT /api/tasks，所以这里先用一段示例数据
+  // （DRAFT_ITEMS，文件里只有这一处“假数据”）。
+  // C 把接口做好后，GET 成功就会自动改用真实数据，不用改这里。
+  //
+  // ⚠ 字段名是草稿：category / quota_min / priority，
+  //   等 C 在 docs/API.md 里确认后再定稿。
+  // ---------------------------------------------------------------
+
+  (function () {
+    "use strict";
+
+    var DRAFT_ITEMS = [
+      { category: "作业", quota_min: 240, priority: 1 },
+      { category: "C语言", quota_min: 180, priority: 1 },
+      { category: "项目", quota_min: 120, priority: 2 },
+      { category: "刷题", quota_min: 90, priority: 3 },
+      { category: "CS50", quota_min: 60, priority: 3 }
+    ];
+
+    var els = {
+      draftNotice: document.getElementById("draft-notice"),
+      message: document.getElementById("message"),
+      loading: document.getElementById("loading-state"),
+      errorBox: document.getElementById("error-state"),
+      errorText: document.getElementById("error-text"),
+      retry: document.getElementById("retry-button"),
+      empty: document.getElementById("empty-state"),
+      fillDefault: document.getElementById("fill-default-button"),
+      list: document.getElementById("quota-list"),
+      actions: document.getElementById("quota-actions"),
+      totalMinutes: document.getElementById("total-minutes"),
+      totalHuman: document.getElementById("total-human"),
+      save: document.getElementById("save-button")
+    };
+
+    // ---------------------------------------------------------------- 提示与三态
+    function showMessage(text, isError) {
+      els.message.hidden = false;
+      els.message.textContent = text;
+      els.message.style.color = isError ? "#b42318" : "#2c7a4b";
+      els.message.style.background = isError ? "#fef3f2" : "#ecfdf3";
+    }
+
+    function showState(state) {
+      els.loading.hidden = state !== "loading";
+      els.empty.hidden = state !== "empty";
+      els.errorBox.hidden = state !== "error";
+
+      var hasCards = state === "cards";
+      els.list.hidden = !hasCards;
+      els.actions.hidden = !hasCards;
+    }
+
+    function showError(text) {
+      els.errorText.textContent = text;
+      showState("error");
+    }
+
+    function toChineseDetail(data, status) {
+      if (data && typeof data.detail === "string") {
+        return data.detail;
+      }
+      return "操作失败（状态码 " + status + "），请稍后再试";
+    }
+
+    // ---------------------------------------------------------------- 总预算
+    function updateTotal() {
+      var total = 0;
+      els.list.querySelectorAll("input[data-category]").forEach(function (input) {
+        var value = Number(input.value);
+        if (Number.isFinite(value) && value > 0) {
+          total += value;
+        }
+      });
+
+      els.totalMinutes.textContent = total;
+      var hours = Math.floor(total / 60);
+      var minutes = total % 60;
+      if (minutes === 0) {
+        els.totalHuman.textContent = hours + " 小时";
+      } else {
+        els.totalHuman.textContent = hours + " 小时 " + minutes + " 分钟";
+      }
+    }
+
+    // ---------------------------------------------------------------- 画 5 张卡
+    function renderQuotas(items) {
+      els.list.replaceChildren();
+
+      items.forEach(function (item) {
+        var card = document.createElement("article");
+        card.className = "quota-card";
+        card.setAttribute("data-category", item.category);
+
+        var title = document.createElement("h3");
+        title.textContent = item.category;
+        card.appendChild(title);
+
+        var fields = document.createElement("div");
+        fields.className = "quota-fields";
+
+        // 周配额（分钟）
+        var quotaLabel = document.createElement("label");
+        quotaLabel.textContent = "周配额（分钟）";
+        var quotaInput = document.createElement("input");
+        quotaInput.type = "number";
+        quotaInput.min = "0";
+        quotaInput.step = "15";
+        quotaInput.value = item.quota_min;
+        quotaInput.setAttribute("data-category", item.category);
+        quotaInput.setAttribute("data-field", "quota_min");
+        quotaInput.addEventListener("input", updateTotal);
+        quotaLabel.appendChild(quotaInput);
+
+        // 优先级 1–5
+        var priorityLabel = document.createElement("label");
+        priorityLabel.textContent = "优先级";
+        var prioritySelect = document.createElement("select");
+        prioritySelect.setAttribute("data-field", "priority");
+        for (var level = 1; level <= 5; level += 1) {
+          var option = document.createElement("option");
+          option.value = String(level);
+          option.textContent = level === 1 ? "1（最高）" : level === 5 ? "5（最低）" : String(level);
+          if (Number(item.priority) === level) {
+            option.selected = true;
+          }
+          prioritySelect.appendChild(option);
+        }
+        priorityLabel.appendChild(prioritySelect);
+
+        fields.appendChild(quotaLabel);
+        fields.appendChild(priorityLabel);
+        card.appendChild(fields);
+        els.list.appendChild(card);
+      });
+
+      showState("cards");
+      updateTotal();
+    }
+
+    // 从页面上把 5 行的当前值收集成数组
+    function collectItems() {
+      var items = [];
+      els.list.querySelectorAll(".quota-card").forEach(function (card) {
+        items.push({
+          category: card.getAttribute("data-category"),
+          quota_min: Number(card.querySelector('input[data-field="quota_min"]').value) || 0,
+          priority: Number(card.querySelector('select[data-field="priority"]').value) || 1
+        });
+      });
+      return items;
+    }
+
+    // ---------------------------------------------------------------- 拉数据
+    async function loadQuotas() {
+      showState("loading");
+
+      var response;
+      try {
+        response = await fetch("/api/tasks");
+      } catch (error) {
+        showError("连不上后台。请确认终端里还在运行 Uvicorn。");
+        return;
+      }
+
+      // 404 = 接口还没做（或还没有配额数据）：用示例数据，并显示黄色提示
+      if (response.status === 404) {
+        els.draftNotice.hidden = false;
+        renderQuotas(DRAFT_ITEMS);
+        return;
+      }
+
+      if (!response.ok) {
+        var data = await response.json().catch(function () { return {}; });
+        showError(toChineseDetail(data, response.status));
+        return;
+      }
+
+      var result = await response.json();
+      var items = Array.isArray(result.items) ? result.items : [];
+
+      if (items.length === 0) {
+        els.draftNotice.hidden = true;
+        showState("empty");
+        return;
+      }
+
+      els.draftNotice.hidden = true;
+      renderQuotas(items);
+    }
+
+    // ---------------------------------------------------------------- 保存
+    async function saveQuotas() {
+      els.save.disabled = true;
+      showMessage("正在保存…", false);
+
+      var response;
+      try {
+        response = await fetch("/api/tasks", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: collectItems() })
+        });
+      } catch (error) {
+        els.save.disabled = false;
+        showMessage("连不上后台，页面上的数字没有丢。", true);
+        return;
+      }
+
+      if (response.ok) {
+        showMessage("配额已保存。", false);
+      } else if (response.status === 404) {
+        // 接口还没做：不报“页面坏了”，把原因说清楚
+        showMessage("后端还没有 /api/tasks 接口（等 C），现在改的数字只留在页面上。", true);
+      } else {
+        var data = await response.json().catch(function () { return {}; });
+        showMessage(toChineseDetail(data, response.status), true);
+      }
+
+      els.save.disabled = false;
+    }
+
+    // ---------------------------------------------------------------- 绑定按钮
+    els.retry.addEventListener("click", loadQuotas);
+    els.save.addEventListener("click", saveQuotas);
+    els.fillDefault.addEventListener("click", function () {
+      els.draftNotice.hidden = false;
+      renderQuotas(DRAFT_ITEMS);
+    });
+
+    // ---------------------------------------------------------------- 启动
+    loadQuotas();
+  })();
+</script>
+{% endblock %}

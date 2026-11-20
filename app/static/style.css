@@ -23,3 +23,367 @@ article table td:last-child {
 footer small {
   color: #6b7280;
 }
+
+/* ===================== 课程页：375px 下一行一张卡片 =====================
+   手机上表格太挤，把每一行变成一张卡，列名用 ::before 显示。
+   桌面端仍然是普通表格，不受影响。 */
+@media (max-width: 480px) {
+  .courses-table thead {
+    display: none;
+  }
+
+  .courses-table,
+  .courses-table tbody,
+  .courses-table tr,
+  .courses-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .courses-table tr {
+    padding: 0.6rem 0;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .courses-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.2rem 0;
+    border: none;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  /* 每格左边的灰色列名 */
+  .courses-table td[data-label]::before {
+    content: attr(data-label);
+    color: #6b7280;
+    font-weight: 600;
+    flex: 0 0 auto;
+  }
+
+  /* 没课时的提示行：正常左对齐，不要列名 */
+  .courses-table td:not([data-label]) {
+    display: block;
+    text-align: left;
+  }
+
+  .courses-table td.cell-action {
+    justify-content: flex-end;
+    padding-top: 0.4rem;
+  }
+
+  .courses-table td.cell-action::before {
+    display: none;
+  }
+
+  /* 删除按钮：手指点得中 */
+  .courses-table td.cell-action button {
+    min-height: 44px;
+    min-width: 88px;
+    margin: 0;
+  }
+}
+
+/* ===================== 任务配额页（tasks.html） ===================== */
+
+/* 给底部固定条留位置，最后一张卡不会被挡住 */
+.quota-page {
+  padding-bottom: 5.5rem;
+}
+
+/* 示例数据 / 接口未接上的提示条 */
+.quota-notice {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid #f5d58b;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+/* 提示条统一外观：成功绿色、失败红色（颜色由 JS 改） */
+#message {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+/* 5 张配额卡 */
+.quota-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.quota-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.quota-card h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1.05rem;
+}
+
+.quota-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.quota-fields label {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+/* 输入框和下拉框都至少 44px 高 */
+.quota-fields input,
+.quota-fields select {
+  margin-bottom: 0;
+  min-height: 44px;
+}
+
+/* 底部固定条：总预算 + 保存按钮，单手能点到 */
+.quota-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+}
+
+.quota-total {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.quota-total small {
+  display: block;
+  color: #6b7280;
+  font-weight: normal;
+}
+
+.quota-actions button {
+  margin: 0;
+  min-height: 44px;
+  flex: 0 0 auto;
+}
+
+/* 很窄的屏幕上，两张输入框改成上下排 */
+@media (max-width: 400px) {
+  .quota-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===================== 本周计划页（plan.html） ===================== */
+
+/* 页面容器：不超出屏幕，长标题自动换行 */
+.plan-page {
+  max-width: 100%;
+}
+
+/* 顶部切周：左右两个 44×44 按钮 */
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.week-nav button {
+  margin: 0;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.25rem 0.75rem;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.week-label {
+  flex: 1;
+  min-width: 0; /* 关键：允许收缩，否则长日期会把页面撑宽 */
+  text-align: center;
+}
+
+.week-label strong {
+  display: block;
+  font-size: 1.05rem;
+}
+
+.week-label small {
+  color: #6b7280;
+}
+
+/* 计划页所有按钮至少 44px 高 */
+.plan-page button {
+  min-height: 44px;
+}
+
+/* ------------------------------------------------ 本周报告 */
+.report-card header {
+  padding-bottom: 0;
+}
+
+.report-card h3 {
+  margin: 0;
+}
+
+.stat-row {
+  display: flex;
+  gap: 0.5rem;
+  text-align: center;
+  margin: 0.5rem 0 1rem;
+}
+
+.stat-row > div {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.25rem;
+  background: #f8fafc;
+  border-radius: 0.5rem;
+}
+
+.stat-row strong {
+  display: block;
+  font-size: 1.6rem;
+  line-height: 1.2;
+}
+
+.stat-row small {
+  color: #6b7280;
+}
+
+.report-card footer {
+  margin-top: 0.5rem;
+}
+
+.report-card footer button {
+  margin-bottom: 0;
+}
+
+/* ------------------------------------------------ 时间块 */
+.plan-page h3 {
+  margin-bottom: 0.5rem;
+}
+
+#today-date {
+  color: #6b7280;
+  font-weight: normal;
+  font-size: 0.9rem;
+}
+
+.block-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid #e5e7eb;
+  min-width: 0;
+}
+
+.block-item:last-child {
+  border-bottom: none;
+}
+
+.block-time {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.block-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.badge {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 0.3rem;
+  white-space: nowrap;
+}
+
+.badge-course {
+  background: #e0ecff;
+  color: #1d4ed8;
+}
+
+.badge-fixed {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
+.badge-task {
+  background: #dcfce7;
+  color: #166534;
+}
+
+/* ------------------------------------------------ 按天分组 */
+.day-group {
+  margin: 0 0 1rem;
+}
+
+.day-group h4 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0 0 0.25rem;
+}
+
+.day-group h4 small {
+  color: #6b7280;
+  font-weight: normal;
+}
+
+.day-group.today h4,
+.day-group.today h4 small {
+  color: #166534;
+}
+
+.empty-day {
+  color: #9ca3af;
+  margin: 0.25rem 0;
+}
+
+/* ------------------------------------------------ 未排任务 */
+.unscheduled-list {
+  padding-left: 1.25rem;
+}
+
+.unscheduled-list li {
+  margin-bottom: 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.unscheduled-list small {
+  color: #6b7280;
+}
+
+/* ------------------------------------------------ 375px 手机微调 */
+@media (max-width: 480px) {
+  .stat-row strong {
+    font-size: 1.35rem;
+  }
+
+  .week-label strong {
+    font-size: 1rem;
+  }
+
+  .block-time {
+    font-size: 0.9rem;
+  }
+}

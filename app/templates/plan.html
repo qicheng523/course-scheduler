@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}本周计划 · 课表排程器{% endblock %}
+
+{% block content %}
+<div class="plan-page">
+
+  <!-- ① 切周：上一周 / 下一周。周一会写进网址，刷新后还是这一周 -->
+  <div class="week-nav" role="group" aria-label="切换周">
+    <button type="button" id="prev-week" class="secondary outline" aria-label="上一周">‹</button>
+    <div class="week-label">
+      <strong id="week-range">加载中…</strong>
+      <small id="week-note"></small>
+    </div>
+    <button type="button" id="next-week" class="secondary outline" aria-label="下一周">›</button>
+  </div>
+
+  <!-- ② 提示条：成功绿色、失败红色，平时隐藏 -->
+  <p id="message" role="status" aria-live="polite" hidden></p>
+
+  <!-- ③ 三态之一：加载中 -->
+  <div id="loading-state" class="state-box" aria-busy="true">
+    <p>正在加载本周计划…</p>
+  </div>
+
+  <!-- ④ 三态之二：出错（中文提示 + 重试） -->
+  <div id="error-state" class="state-box" role="alert" hidden>
+    <p id="error-text">加载失败了。</p>
+    <button type="button" id="retry-button">重试</button>
+  </div>
+
+  <!-- ⑤ 三态之三：这一周还没有计划（404） -->
+  <div id="empty-state" class="state-box" hidden>
+    <p><strong>这一周还没有生成计划。</strong></p>
+    <p>点下面按钮，系统会把课、固定事件和任务排进这周的空闲时间。</p>
+    <button type="button" class="generate-button">生成本周计划</button>
+    <p><small>生成后还是空的？先确认「课程」页有课，任务要等 B 灌进数据库。</small></p>
+  </div>
+
+  <!-- ⑥ 首屏第一块：本周报告 -->
+  <article id="report-card" class="report-card" hidden>
+    <header><h3>本周报告</h3></header>
+    <div class="stat-row">
+      <div><strong id="stat-scheduled">–</strong><small>个任务已排</small></div>
+      <div><strong id="stat-unscheduled">–</strong><small>个任务未排</small></div>
+      <div><strong id="stat-days">–</strong><small>天有安排</small></div>
+    </div>
+    <footer>
+      <button type="button" class="generate-button secondary">重新生成本周计划</button>
+    </footer>
+  </article>
+
+  <!-- ⑦ 首屏第二块：今天做什么 -->
+  <section id="today-section" hidden>
+    <h3>今天做什么 <small id="today-date"></small></h3>
+    <div id="today-list"></div>
+  </section>
+
+  <!-- ⑧ 没排下的任务：有才显示 -->
+  <section id="unscheduled-section" hidden>
+    <h3>没排下的任务</h3>
+    <ul id="unscheduled-list" class="unscheduled-list"></ul>
+  </section>
+
+  <!-- ⑨ 本周安排：按天竖着排 -->
+  <section id="week-section" hidden>
+    <h3>本周安排</h3>
+    <div id="week-days"></div>
+  </section>
+
+</div>
+
+<!-- 页面逻辑放在单独的 JS 文件里，HTML 只负责骨架 -->
+<script src="/static/plan.js" defer></script>
+{% endblock %}
