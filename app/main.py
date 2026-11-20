@@ -76,3 +76,13 @@ def courses_page(request: Request):
         name="courses.html",
         context={"version": __version__, "db_path": str(DB_PATH), "courses": []},
     )
+
+
+@app.get("/plan", response_class=HTMLResponse)
+def plan_page(request: Request):
+    """计划页：模板由 A 维护（app/templates/plan.html），数据由页面调 /api/plan/* 拿。"""
+    return templates.TemplateResponse(
+        request=request,
+        name="plan.html",
+        context={"version": __version__, "db_path": str(DB_PATH)},
+    )
