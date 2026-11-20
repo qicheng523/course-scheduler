@@ -18,7 +18,16 @@ D3 验收报告（tools/verify_d03.py 自动生成）
 [C] C6 PASS 场景3 周六·只有课 → 1 整段  —— 1 段
 [C] C7 PASS 场景4 周六·课+固定事件 → 2 段  —— 2 段
 [C] C8 PASS 场景5 周日·课+固定事件 → 1 整段  —— 1 段
-[C] C9 PASS pytest 全绿且 ≥13 passed  —— passed=17 failed=0；17 passed in 1.56s
+[C] C9 PASS pytest 全绿且 ≥13 passed  —— passed=17 failed=0；17 passed in 1.20s
 [C] C10 PASS 真库（灌过 seed）周四 = 场景2 的 5 段
+[P] P1 FAIL app/services/scheduler.py 存在  —— 文件不存在
+[P] P2 FAIL plan.py 里有 POST /api/plan/generate  —— 没找到
+[P] P3 FAIL plan.py 里有 GET /api/plan/{week_start}  —— 没找到
+[P] P4 FAIL generate 返回 201 + 冻结字段 + 至少 4 个任务排进去  —— 接口还没写，跳过
+[P] P5 FAIL 同一周再生成会覆盖（块数不翻倍）  —— 接口还没写，跳过
+[P] P6 FAIL GET /api/plan/{week_start} 和 generate 一致  —— 接口还没写，跳过
+[P] P7 FAIL 连跑两次结果完全一样（不许随机）  —— 接口还没写，跳过
+[P] P8 FAIL 零重叠 / 15–120 分钟 / 不跨晚自习 / 不晚于截止 / 按序  —— 接口还没写，跳过
+[P] P9 FAIL pytest 全绿且 ≥23 passed  —— passed=17 failed=0
 
-合计：PASS 15 / FAIL 5 / WARN 0
+合计：PASS 15 / FAIL 14 / WARN 0
