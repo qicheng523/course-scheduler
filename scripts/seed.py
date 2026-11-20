@@ -1,4 +1,4 @@
-"""灌种子数据：把 19 条真实课表 + 固定事件写进 data/app.db。
+"""灌种子数据：把 19 条真实课表 + 固定事件 + 5 条冻结任务写进 data/app.db。
 
 用法（在项目根目录）：
     python scripts/seed.py
@@ -6,13 +6,19 @@
 干了什么（按顺序）：
 1. 读 data/seed-courses.txt（B 维护的唯一数据源），解析成课程列表；
 2. 加上文件顶部的固定事件清单（睡觉、三餐、英语班，改作息只改那里）；
-3. 先清空 course / fixed_event 两张表，再写入新数据
-   ——重复跑不会越灌越多（这叫"幂等"）。
+3. 加上任务卡 §5 的 5 条冻结任务（SEED_TASKS）；
+4. 先清空 course / fixed_event / task 三张表，再写入新数据
+   ——重复跑不会越灌越多（这叫"幂等"）；
+   plan / block / checkin 三张表 seed 不碰。
 
 字段约定以 docs/API.md §1 为准：
 - 课程没有"教师"字段，txt 里的"老师A~H"只做脱敏记录，不进数据库；
 - 数据库存分钟整数，这里统一用 "HH:mm" 写，脚本负责转换；
-- 第 9 节（18:00-20:35）是晚自习 = 空闲时间，不是课程，所以不在这里。
+- 第 9 节（19:00-21:00）是晚自习 = 特殊空闲时间，不是课程，所以不在这里。
+
+⚠️ 这个文件被 tests/test_plan.py 直接 import（FIXED_EVENTS / parse_seed_courses /
+to_min 三个名字不能删、不能改行为）；SEED_TASKS 的数字是任务卡 §5 冻结的，
+tests/test_plan.py 里有一份同样的清单——要改两边一起改，且先在群里说。
 """
 
 import sys
@@ -25,7 +31,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from sqlmodel import Session, select  # noqa: E402
 
 from app.db import DB_PATH, create_db_and_tables, engine  # noqa: E402
-from app.models import Course, FixedEvent  # noqa: E402
+from app.models import Course, FixedEvent, Task  # noqa: E402
 
 TERM = "2026f"  # 学期，docs/API.md §1 固定用这个
 
@@ -41,6 +47,17 @@ FIXED_EVENTS = [
     *[("午休", d, "12:50", "14:00", "中午小睡；想让排程用这段时间就删掉这几行") for d in range(1, 6)],
     *[("晚饭", d, "18:00", "18:30", "之后到晚自习结束是空闲") for d in range(1, 6)],
     ("英语班", 6, "09:00", "11:30", "按你的真实时间改"),
+]
+
+# ---------------------------------------------------------------- 冻结任务
+# 任务卡 §5 的 5 条冻结任务（数字别改，tests/test_plan.py 里有一份同样的）。
+# status 不写 = 用模型默认值 "todo"，排程算法会捡走（status != "done" 才排）。
+SEED_TASKS = [
+    {"title": "线性代数第二章习题", "category": "作业", "duration_min": 90, "deadline": "2026-11-20T23:59:00", "priority": 1},
+    {"title": "指针练习 10 题", "category": "C语言", "duration_min": 60, "deadline": "2026-11-21T23:59:00", "priority": 1},
+    {"title": "课表排程器 接口联调", "category": "项目", "duration_min": 120, "deadline": "2026-11-22T23:59:00", "priority": 2},
+    {"title": "数组类题 5 道", "category": "刷题", "duration_min": 60, "deadline": "2026-11-22T23:59:00", "priority": 2},
+    {"title": "CS50 第 3 讲 视频+笔记", "category": "CS50", "duration_min": 45, "deadline": "2026-11-22T23:59:00", "priority": 3},
 ]
 
 # ---------------------------------------------------------------- 时间模型
@@ -105,17 +122,29 @@ def parse_seed_courses(path: Path) -> list[dict]:
     return courses
 
 
-def clear_and_seed(courses: list[dict], fixed_events: list[tuple]) -> None:
-    """先清空 course / fixed_event 两张表，再写入新的（幂等）。"""
+def clear_and_seed(
+    courses: list[dict], fixed_events: list[tuple], tasks: list[dict]
+) -> None:
+    """先清空 course / fixed_event / task 三张表，再写入新的（幂等）。
+
+    只碰这三张表（seed 自己灌的三样东西）；plan / block / checkin 不碰，
+    所以排程结果、打卡记录不会被 seed 误删。
+    """
     with Session(engine) as session:
         old_courses = session.exec(select(Course)).all()
         old_events = session.exec(select(FixedEvent)).all()
+        old_tasks = session.exec(select(Task)).all()
         for row in old_courses:
             session.delete(row)
         for row in old_events:
             session.delete(row)
+        for row in old_tasks:
+            session.delete(row)
         session.commit()
-        print(f"[1/3] 清掉旧数据：课程 {len(old_courses)} 条、固定事件 {len(old_events)} 条")
+        print(
+            f"[1/3] 清掉旧数据：课程 {len(old_courses)} 条、固定事件 {len(old_events)} 条、"
+            f"任务 {len(old_tasks)} 条"
+        )
 
         for c in courses:
             session.add(Course(**c))
@@ -129,8 +158,13 @@ def clear_and_seed(courses: list[dict], fixed_events: list[tuple]) -> None:
                     note=note or None,
                 )
             )
+        for t in tasks:
+            session.add(Task(**t))
         session.commit()
-        print(f"[2/3] 写入：课程 {len(courses)} 条、固定事件 {len(fixed_events)} 条")
+        print(
+            f"[2/3] 写入：课程 {len(courses)} 条、固定事件 {len(fixed_events)} 条、"
+            f"任务 {len(tasks)} 条"
+        )
         print(f"[3/3] 数据库：{DB_PATH}")
 
 
@@ -142,7 +176,7 @@ def main() -> int:
     if len(courses) != 19:
         print(f"[warn] txt 里解析出 {len(courses)} 条课程，预期是 19 条（docs/API.md §4）")
 
-    clear_and_seed(courses, FIXED_EVENTS)
+    clear_and_seed(courses, FIXED_EVENTS, SEED_TASKS)
 
     print("\n灌完了。启动网站后打开 http://127.0.0.1:8000/api/courses 应该看到 total=19。")
     return 0

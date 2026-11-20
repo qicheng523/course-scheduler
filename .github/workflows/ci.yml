@@ -5,7 +5,9 @@
 #   1. 装 Python 3.12 + 依赖（requirements.txt 版本锁死，三台电脑和 CI 装出来一模一样）
 #   2. 环境自检 scripts/check_env.py（7 个依赖都要 [OK]）
 #   3. 全部测试 python -m pytest -q（过线标准：17 passed 起步，只增不减）
-#   4. seed 冒烟：重置空库 → 灌种子 → 核对 19 课 + 35 固定事件（保证数据脚本没坏）
+#   4. seed 冒烟：重置空库 → 灌种子 → 核对 19 课 + 35 固定事件 + 5 任务（保证数据脚本没坏）。
+#      注意：这里跑的"重置"是在 GitHub 的一次性机器上，清的是临时库；
+#      本地别对真库跑 reset_db，它会清掉全部数据（包括任务）。
 # 怎么看结果：GitHub 仓库 → Actions 标签页 → 绿色 ✓ = 全过；
 #             红色 ✗ 就点进去看哪一步挂了，截图发群里。
 name: CI
@@ -38,8 +40,8 @@ jobs:
       - name: 跑全部测试
         run: python -m pytest -q
 
-      - name: 验证 seed 脚本没坏（重置 → 灌入 → 核对条数）
+      - name: 验证 seed 脚本没坏（重置 → 灌入 → 核对条数，task 表最后应有 5 条）
         run: |
           python scripts/reset_db.py --yes
           python scripts/seed.py
-          python -c "from sqlmodel import Session, select; from app.db import engine; from app.models import Course, FixedEvent; s = Session(engine); c = len(s.exec(select(Course)).all()); e = len(s.exec(select(FixedEvent)).all()); assert c == 19 and e == 35, f'seed 结果不对：course={c} fixed_event={e}'; print(f'seed OK：course={c} fixed_event={e}')"
+          python -c "from sqlmodel import Session, select; from app.db import engine; from app.models import Course, FixedEvent, Task; s = Session(engine); c = len(s.exec(select(Course)).all()); e = len(s.exec(select(FixedEvent)).all()); t = len(s.exec(select(Task)).all()); assert (c, e, t) == (19, 35, 5), f'seed 结果不对：course={c} fixed_event={e} task={t}'; print(f'seed OK：course={c} fixed_event={e} task={t}')"
