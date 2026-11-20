@@ -1,0 +1,15 @@
+# /api/plan 证据（真库：19 课 + 35 固定事件 + 5 条冻结任务）
+
+PS> python -c "import json,urllib.request as u; req=u.Request('http://127.0.0.1:8000/api/plan/generate', data=json.dumps({'week_start':'2026-11-16'}).encode(), headers={'Content-Type':'application/json'}); d=json.load(u.urlopen(req)); print('plan', d['plan_id'], '| blocks', len(d['blocks']), '| stats', d['stats']); print('task_blocks', [(b['date'], b['start'], b['end'], b['task_id']) for b in d['blocks'] if b['kind']=='task'])"    # 第 1 次 generate
+plan 1 | blocks 45 | stats {'scheduled': 5, 'unscheduled': 0}
+task_blocks [('2026-11-16', '19:00', '20:30', 1), ('2026-11-17', '19:00', '20:00', 2), ('2026-11-18', '19:00', '21:00', 3), ('2026-11-19', '19:00', '20:00', 4), ('2026-11-20', '19:00', '19:45', 5)]
+
+PS> python -c "import json,urllib.request as u; req=u.Request('http://127.0.0.1:8000/api/plan/generate', data=json.dumps({'week_start':'2026-11-16'}).encode(), headers={'Content-Type':'application/json'}); d=json.load(u.urlopen(req)); print('plan', d['plan_id'], '| blocks', len(d['blocks']), '| stats', d['stats']); print('task_blocks', [(b['date'], b['start'], b['end'], b['task_id']) for b in d['blocks'] if b['kind']=='task'])"    # 第 2 次 generate
+plan 1 | blocks 45 | stats {'scheduled': 5, 'unscheduled': 0}
+task_blocks [('2026-11-16', '19:00', '20:30', 1), ('2026-11-17', '19:00', '20:00', 2), ('2026-11-18', '19:00', '21:00', 3), ('2026-11-19', '19:00', '20:00', 4), ('2026-11-20', '19:00', '19:45', 5)]
+
+PS> python -c "import json,urllib.request as u; d=json.load(u.urlopen('http://127.0.0.1:8000/api/plan/2026-11-16')); print('GET blocks', len(d['blocks']), '| stats', d['stats'])"
+GET blocks 45 | stats {'scheduled': 5, 'unscheduled': 0}
+
+PS> GET /api/plan/2026-12-07（没生成过）→ 404
+HTTP 404 {'detail': '这一周还没有计划'}
