@@ -1,0 +1,14 @@
+===== 按状态卡 §8 验收命令执行 =====
+
+1) 重置 + 灌种子
+旧数据库已删除：C:\wangpan\Microsoft VS Code\xiangmu\coruse-scheduler\data\app.db
+已重建空库（只有表结构，没有数据）。
+下一步：python scripts/seed.py 灌入演示数据
+[2/3] 写入：课程 19 条、固定事件 35 条、任务 5 条
+
+2) 三张表计数（期望 course=19 fixed_event=35 task=5）
+{'course': 19, 'fixed_event': 35, 'task': 5}
+
+3) 对应提交
+3e95fe6 B: 工作日志 D4 收尾（网站验证 + /tasks 404 记录）
+164ceb6 B: 5 条冻结任务进 seed（幂等 19/35/5）+ smoke 核对升级 + 数据说明书 + D4 证据
