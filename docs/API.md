@@ -1,4 +1,4 @@
-# API · 三个人的合同（v0.5，2026-11-20 更新；v0.1 于 11-17 冻结）
+# API · 三个人的合同（v0.6，2026-11-21 更新；v0.1 于 11-17 冻结）
 
 > **这份文件是 A、B、C 三个人共同的约定。** 谁都不许自己偷偷改字段名。
 > 改一行 → 群里说 → 改这里 → 记一行变更 → 通知另外两个人。
@@ -295,6 +295,102 @@ GET /api/plan/2026-11-16
 
 > **`blocks` 里不放 `free`** 是故意的：页面画"课 + 事件 + 任务"三种实块，空档另用 `/api/slots` 画浅色背景，两者不会打架。
 
+### ⑧ 打卡（v0.6 新增，D8；**幂等**是重点）
+
+```http
+PATCH /api/checkin
+Content-Type: application/json
+
+{"task_id": 3, "date": "2026-11-23", "note": "写完一半"}
+```
+
+成功 `200`：
+
+```json
+{"task_id": 3, "date": "2026-11-23", "done_at": "2026-11-23T20:15:00", "note": "写完一半", "created": true}
+```
+
+| 规则 | 要求 |
+|---|---|
+| **幂等** | 同一天同一个任务**再打一次** → 仍然 `200`，`created: false`，**不新增记录、不报错**（`checkin` 表已有 `(task_id, date)` 唯一约束） |
+| `note` | 可选，不带就存 `null` |
+| `done_at` | 服务器时间（ISO 字符串） |
+| 任务不存在 | `404` + `{"detail": "任务不存在"}` |
+| `date` 格式不对 | `422` + `{"detail": "日期要写成 2026-11-23 这样的格式"}` |
+| 没有"取消打卡"接口 | 演示不需要，别做 |
+
+### ⑨ 本周统计（v0.6 新增，D8；报告有 4 个指标）
+
+```http
+GET /api/stats/week?week_start=2026-11-23
+```
+
+```json
+{
+  "week_start": "2026-11-23",
+  "totals": {"scheduled": 5, "done": 2, "unscheduled": 0, "planned_minutes": 375},
+  "by_day": [
+    {"date": "2026-11-23", "tasks": 2, "done": 1, "minutes": 150},
+    {"date": "2026-11-24", "tasks": 0, "done": 0, "minutes": 0}
+  ],
+  "by_category": [
+    {"category": "作业", "tasks": 1, "done": 1, "minutes": 90}
+  ]
+}
+```
+
+| 字段 | 说明 |
+|---|---|
+| `totals` | **固定 4 个指标**：已排任务数 `scheduled`、已完成 `done`、未排 `unscheduled`、已排总时长 `planned_minutes` |
+| `by_day` | **永远 7 条**（`week_start` 起连续七天，没有任务的那天也要有，`tasks/done/minutes` 给 0）；按日期升序 |
+| `by_category` | 只列**这一周真的出现过**的类别，按 `minutes` 从大到小 |
+| `done` 怎么算 | `checkin` 表里这一周该任务的打卡记录数（**重复打卡只算一次**） |
+| 这一周没有计划 | `404` + `{"detail": "这一周还没有计划"}` |
+
+### ⑩ 导出 Markdown（v0.6 新增，D8；答辩"导出文字"那一分）
+
+```http
+GET /api/export.md?week_start=2026-11-23
+```
+
+- `Content-Type: text/markdown; charset=utf-8`，**UTF-8，中文不能乱码**
+- 附带 `Content-Disposition: attachment; filename="export-2026-11-23.md"`（浏览器直接下载）
+- 返回的正文**结构冻结**（A 的导出按钮就是点这个链接）：
+
+```markdown
+# 课表排程周报 · 2026-11-23 ~ 2026-11-29
+
+## 概览
+
+- 已排任务：5 个 / 375 分钟
+- 已完成：2 个
+- 没排下：0 个
+
+## 每天安排
+
+### 周一 11-23
+- 19:00–20:30 线性代数第二章习题 ✅
+### 周二 11-24
+- （没有安排）
+
+## 没排下的任务
+
+- （没有）
+
+## 打卡记录
+
+- 2026-11-23 线性代数第二章习题
+```
+
+| 规则 | 要求 |
+|---|---|
+| 没有计划 | `404` + `{"detail": "这一周还没有计划"}`，**不要**返回空文件 |
+| 没有任务的某一天 | 写一句 `- （没有安排）`，**不许省略这一天** |
+| 已完成标记 | 打了卡的任务后面加 `✅` |
+| 不用手写 MIME | 用 FastAPI 的 `Response(media_type="text/markdown; charset=utf-8")` |
+
+> ⑤⑥⑦⑧⑨⑩ 的字段名都是**冻结**的。A 的页面只认这些名字；C 想改，先改这里再群里说。
+
 ---
 
 ## 4 19 条真实课表（B 的 seed 用这个，别编假数据）
@@ -335,3 +431,4 @@ GET /api/plan/2026-11-16
 | 2026-11-18 | **v0.3：晚自习时间更正为 19:00–21:00（120 分钟）**，原写 18:00–20:35 是错的；连带影响：傍晚多出 17:50–18:50 一段、21:10–21:30 只剩 20 分钟、单任务上限 120 分钟 | C |
 | 2026-11-18 | **v0.4：新增 §3⑤ `/api/slots` 返回格式**（`items/start/end/minutes/kind/total`，`kind` 只许 `free`/`evening`，五条保证 + 两条错误码）；同时把 §4 残留的 18:00–20:35 改成 19:00–21:00、标题更新到 v0.4 | 总纲代拟，C 确认 |
 | 2026-11-20 | **v0.5：新增 §3⑥ `POST /api/plan/generate` 与 §3⑦ `GET /api/plan/{week_start}` 的返回格式**（`plan_id/week_start/blocks/unscheduled/stats`，blocks 只含 course/fixed/task，不含 free；七条保证：零重叠、单块 15–120、不跨晚自习边界、范围 07:30–21:30、排序确定可复现、同周再生成覆盖旧计划、排不下必须写 reason） | 总纲代拟，C 确认 |
+| 2026-11-21 | **v0.6：新增 §3⑧ `PATCH /api/checkin`（幂等）、§3⑨ `GET /api/stats/week`（4 个指标 + 固定 7 条 by_day）、§3⑩ `GET /api/export.md`（UTF-8 Markdown，结构冻结）** | 总纲代拟，C 确认 |

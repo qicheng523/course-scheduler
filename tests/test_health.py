@@ -20,9 +20,9 @@ def test_health_returns_ok() -> None:
 
 
 def test_index_renders_html() -> None:
-    """首页必须 200 且是 HTML，说明模板目录配置正确。"""
+    """首页必须 200 且是 HTML（11-21 起首屏 = 计划页，答辩第一屏）。"""
     response = client.get("/")
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
-    assert "骨架已启动" in response.text
+    assert "本周计划" in response.text

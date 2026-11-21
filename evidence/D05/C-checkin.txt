@@ -1,0 +1,152 @@
+========================================================================
+D05 证据 · C 的打卡 / 周统计 / Markdown 导出（docs/API.md v0.6 §3⑧⑨⑩）
+数据：19 课 + 35 固定事件 + 5 条冻结任务（内存库，不动 data/app.db）
+========================================================================
+
+$ POST /api/plan/generate {"week_start": "2026-11-16"}  -> 201
+  plan_id=1  blocks=45  stats={'scheduled': 5, 'unscheduled': 0}
+
+------------------------------------------------------------------------
+K1 第一次打卡：PATCH /api/checkin {"task_id":1,"date":"2026-11-17"}
+-> 200
+{
+  "task_id": 1,
+  "date": "2026-11-17",
+  "done_at": "2026-11-21T18:28:59",
+  "note": null,
+  "created": true
+}
+
+K2 完全相同的请求再发一次（幂等：created 必须变 false，不能新增记录）
+-> 200
+{
+  "task_id": 1,
+  "date": "2026-11-17",
+  "done_at": "2026-11-21T18:28:59",
+  "note": null,
+  "created": false
+}
+K3 checkin 表行数（重复打卡后必须是 1）：1
+
+K4 打一个不存在的任务：PATCH /api/checkin {"task_id":99999,...}
+-> 404  {
+  "detail": "任务不存在"
+}
+
+K5 日期写成 2026/11/17（格式错）
+-> 422  {
+  "detail": "日期要写成 2026-11-23 这样的格式"
+}
+
+------------------------------------------------------------------------
+GET /api/stats/week?week_start=2026-11-16
+-> 200
+{
+  "week_start": "2026-11-16",
+  "totals": {
+    "scheduled": 5,
+    "done": 1,
+    "unscheduled": 0,
+    "planned_minutes": 375
+  },
+  "by_day": [
+    {
+      "date": "2026-11-16",
+      "tasks": 1,
+      "done": 1,
+      "minutes": 90
+    },
+    {
+      "date": "2026-11-17",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 60
+    },
+    {
+      "date": "2026-11-18",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 120
+    },
+    {
+      "date": "2026-11-19",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 60
+    },
+    {
+      "date": "2026-11-20",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 45
+    },
+    {
+      "date": "2026-11-21",
+      "tasks": 0,
+      "done": 0,
+      "minutes": 0
+    },
+    {
+      "date": "2026-11-22",
+      "tasks": 0,
+      "done": 0,
+      "minutes": 0
+    }
+  ],
+  "by_category": [
+    {
+      "category": "项目",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 120
+    },
+    {
+      "category": "作业",
+      "tasks": 1,
+      "done": 1,
+      "minutes": 90
+    },
+    {
+      "category": "C语言",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 60
+    },
+    {
+      "category": "刷题",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 60
+    },
+    {
+      "category": "CS50",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 45
+    }
+  ]
+}
+
+------------------------------------------------------------------------
+GET /api/export.md?week_start=2026-11-16
+-> 200
+  content-type: text/markdown; charset=utf-8
+  content-disposition: attachment; filename="export-2026-11-16.md"
+  正文已写入 evidence\D05\C-export.md（383 字符）
+  正文前 12 行：
+    # 课表排程周报 · 2026-11-16 ~ 2026-11-22
+    
+    ## 概览
+    
+    - 已排任务：5 个 / 375 分钟
+    - 已完成：1 个
+    - 没排下：0 个
+    
+    ## 每天安排
+    
+    ### 周一 11-16
+    - 19:00–20:30 线性代数第二章习题 ✅
+
+------------------------------------------------------------------------
+真库未被改动（本脚本只在内存库里造数据）：
+  data/app.db = {'course': 19, 'fixed_event': 35, 'task': 5, 'plan': 1, 'block': 45, 'checkin': 0}

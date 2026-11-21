@@ -1,8 +1,10 @@
 """应用入口：创建 FastAPI 实例，挂模板、静态文件，暴露路由。
 
-今天只有两个路由：
+页面路由：
 - GET /health  健康检查，返回 {"ok": true}，供测试脚本和部署探针使用
-- GET /        首页，只做技术栈自检，不含任何业务功能
+- GET /        首页（11-21 起 = 计划页）：答辩第一屏直接是「本周报告」
+- GET /courses 课程页（A 维护）
+- GET /plan    计划页（A 维护，保留作为直链）
 """
 
 from contextlib import asynccontextmanager
@@ -58,14 +60,15 @@ def health() -> dict[str, bool]:
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    """首页：渲染骨架自检页，证明 Jinja2 模板链路可用。"""
+    """首页 = 计划页（11-21 起）：浏览器打开 / 直接看到「本周报告」。
+
+    原来的技术栈自检页（index.html）保留在 app/templates/ 里当历史记录，
+    不再挂到 / 上——答辩第一屏不能是"骨架自检页"。
+    """
     return templates.TemplateResponse(
         request=request,
-        name="index.html",
-        context={
-            "version": __version__,
-            "db_path": str(DB_PATH),
-        },
+        name="plan.html",
+        context={"version": __version__, "db_path": str(DB_PATH)},
     )
 
 @app.get("/courses", response_class=HTMLResponse)

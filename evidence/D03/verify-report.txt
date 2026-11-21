@@ -1,10 +1,10 @@
 D3 验收报告（tools/verify_d03.py 自动生成）
 
-[A] A1 FAIL 课程页模板 courses.html 存在  —— 文件不存在
-[A] A2 FAIL 模板在请求 /api/courses  —— 模板还没建
-[A] A3 FAIL 表单字段齐全（name/weekday/start/end）  —— 模板还没建
-[A] A4 FAIL 导航里有指向 /courses 的链接  —— base.html 里要有 href="/courses"
-[A] A5 FAIL GET /courses 返回 200  —— TemplateNotFound: 'courses.html' not found in search path: 'D:\\dsh-workspaces\\课表排程工作区\\app\\templa
+[A] A1 PASS 课程页模板 courses.html 存在  —— 7359 字节
+[A] A2 PASS 模板在请求 /api/courses
+[A] A3 PASS 表单字段齐全（name/weekday/start/end）
+[A] A4 PASS 导航里有指向 /courses 的链接
+[A] A5 PASS GET /courses 返回 200  —— 状态码 200
 [B] B1 PASS seed.py 和 reset_db.py 都在
 [B] B2 PASS 19 门课，且同一天没有时间重叠  —— 19 门
 [B] B3 PASS 固定事件与冻结清单一致（35 条）  —— 35 条
@@ -18,7 +18,7 @@ D3 验收报告（tools/verify_d03.py 自动生成）
 [C] C6 PASS 场景3 周六·只有课 → 1 整段  —— 1 段
 [C] C7 PASS 场景4 周六·课+固定事件 → 2 段  —— 2 段
 [C] C8 PASS 场景5 周日·课+固定事件 → 1 整段  —— 1 段
-[C] C9 PASS pytest 全绿且 ≥13 passed  —— passed=26 failed=0；26 passed in 1.81s
+[C] C9 PASS pytest 全绿且 ≥13 passed  —— passed=47 failed=0；47 passed in 2.22s
 [C] C10 PASS 真库（灌过 seed）周四 = 场景2 的 5 段
 [P] P1 PASS app/services/scheduler.py 存在
 [P] P2 PASS plan.py 里有 POST /api/plan/generate
@@ -28,6 +28,19 @@ D3 验收报告（tools/verify_d03.py 自动生成）
 [P] P6 PASS GET /api/plan/{week_start} 和 generate 一致  —— 状态码 200，块 45
 [P] P7 PASS 连跑两次结果完全一样（不许随机）
 [P] P8 PASS 零重叠 / 15–120 分钟 / 不跨晚自习 / 不晚于截止 / 按序
-[P] P9 PASS pytest 全绿且 ≥23 passed  —— passed=26 failed=0
+[K] K1 PASS 打卡第一次 200 + created=true  —— 状态码 200，created=True
+[K] K2 PASS 同任务同天再打：仍然是 200 + created=false  —— 状态码 200，created=False
+[K] K3 PASS 重复打卡后 checkin 表只有 1 条  —— 1 条
+[K] K4 PASS 打卡不存在的任务 → 404 中文  —— 状态码 404
+[K] K5 PASS 日期格式错 → 422 中文  —— 状态码 422
+[T] T1 PASS stats 200 + totals 四个指标齐全  —— 状态码 200，totals={'scheduled': 5, 'done': 1, 'unscheduled': 0, 'planned_minutes': 375}
+[T] T2 PASS by_day 正好 7 条、日期连续升序  —— 7 条
+[T] T3 PASS 打卡后 done=1（幂等，不去重就会变 2）  —— done=1
+[E] E1 PASS export 200 + Content-Type 是 text/markdown  —— text/markdown; charset=utf-8
+[E] E2 PASS Markdown 四个标题齐全
+[E] E3 PASS 7 天小节都在（含没有安排的那天）  —— 7 个天小节
+[E] E4 PASS 没有计划的周 → 404 中文  —— 状态码 404
+[P] P9 PASS pytest 全绿且 ≥23 passed  —— passed=47 failed=0
+[P] P10 PASS pytest 全绿且 ≥36 passed（今天加了打卡/统计/导出）  —— passed=47 failed=0
 
-合计：PASS 24 / FAIL 5 / WARN 0
+合计：PASS 42 / FAIL 0 / WARN 0
