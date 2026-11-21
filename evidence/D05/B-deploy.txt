@@ -1,0 +1,7 @@
+# 部署预演（2026-11-21）：模拟 Render 的启动方式
+
+命令：uvicorn app.main:app --host 0.0.0.0 --port $PORT（本机模拟用 8100）
+
+{"ok":true}
+GET /health -> HTTP 200
+GET / -> HTTP 200
