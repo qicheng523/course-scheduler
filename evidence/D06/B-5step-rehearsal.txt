@@ -1,0 +1,22 @@
+# 5 步彩排（A 界面用的接口逐个过）2026-11-22 晚
+
+1) 首页 GET /
+HTTP 200
+
+2) 本周报告 GET /api/plan/2026-11-16
+blocks 45 | stats {'scheduled': 5, 'unscheduled': 0}
+
+3) 打卡 PATCH /api/checkin（第 1 次）
+{"task_id":1,"date":"2026-11-16","done_at":"2026-11-22T15:53:22","note":null,"created":true}
+HTTP 200
+   第 2 次（幂等）
+{"task_id":1,"date":"2026-11-16","done_at":"2026-11-22T15:53:22","note":null,"created":false}
+HTTP 200
+
+4) 统计 GET /api/stats/week（done 应=1）
+totals {'scheduled': 5, 'done': 1, 'unscheduled': 0, 'planned_minutes': 375} | by_day 7 天
+
+5) 导出 GET /api/export.md
+- 已完成：1 个
+- 19:00–20:30 线性代数第二章习题 ✅
+- 2026-11-16 线性代数第二章习题
