@@ -6,7 +6,7 @@
 干了什么（按顺序）：
 1. 读 data/seed-courses.txt（B 维护的唯一数据源），解析成课程列表；
 2. 加上文件顶部的固定事件清单（睡觉、三餐、英语班，改作息只改那里）；
-3. 加上任务卡 §5 的 5 条冻结任务（SEED_TASKS）；
+3. 加上任务卡 §5 的 5 条冻结任务（SEED_TASKS，deadline 相对今天 +2~6 天）；
 4. 先清空 course / fixed_event / task 三张表，再写入新数据
    ——重复跑不会越灌越多（这叫"幂等"）；
    plan / block / checkin 三张表 seed 不碰。
@@ -17,11 +17,13 @@
 - 第 9 节（19:00-21:00）是晚自习 = 特殊空闲时间，不是课程，所以不在这里。
 
 ⚠️ 这个文件被 tests/test_plan.py 直接 import（FIXED_EVENTS / parse_seed_courses /
-to_min 三个名字不能删、不能改行为）；SEED_TASKS 的数字是任务卡 §5 冻结的，
-tests/test_plan.py 里有一份同样的清单——要改两边一起改，且先在群里说。
+to_min 三个名字不能删、不能改行为）；SEED_TASKS 的标题/分类/时长/优先级是任务卡
+§5 冻结的，tests/test_plan.py 里有一份同样的清单（C 的文件，B 不动）；
+deadline 自 11-22 起按任务卡 §3 改为相对日期，两边现在故意不一致——要动先说。
 """
 
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 # 把项目根目录放进导入路径：不管在哪个目录执行，都能 import app
@@ -50,14 +52,32 @@ FIXED_EVENTS = [
 ]
 
 # ---------------------------------------------------------------- 冻结任务
-# 任务卡 §5 的 5 条冻结任务（数字别改，tests/test_plan.py 里有一份同样的）。
+# 标题 / 分类 / 时长 / 优先级 仍是任务卡 §5 的冻结数字（tests/test_plan.py 里
+# 有一份同样的清单，那是 C 的文件，B 不动）。
+# deadline 按 11-22 任务卡 §3 改成"相对今天"：第 k 条任务 = 今天 + k 天 的 23:59
+# （k=2..6）。理由：答辩（11-29）当天重灌数据再生成"本周计划"，写死的旧日期会
+# 全部"截止已过"，一个任务都排不进去；相对日期保证任何一天灌数据都能排出计划。
 # status 不写 = 用模型默认值 "todo"，排程算法会捡走（status != "done" 才排）。
+_SEED_TASK_SPECS = [
+    # (标题, 分类, 时长分钟, 优先级)
+    ("线性代数第二章习题", "作业", 90, 1),
+    ("指针练习 10 题", "C语言", 60, 1),
+    ("课表排程器 接口联调", "项目", 120, 2),
+    ("数组类题 5 道", "刷题", 60, 2),
+    ("CS50 第 3 讲 视频+笔记", "CS50", 45, 3),
+]
+
+_TODAY = date.today()
+
 SEED_TASKS = [
-    {"title": "线性代数第二章习题", "category": "作业", "duration_min": 90, "deadline": "2026-11-20T23:59:00", "priority": 1},
-    {"title": "指针练习 10 题", "category": "C语言", "duration_min": 60, "deadline": "2026-11-21T23:59:00", "priority": 1},
-    {"title": "课表排程器 接口联调", "category": "项目", "duration_min": 120, "deadline": "2026-11-22T23:59:00", "priority": 2},
-    {"title": "数组类题 5 道", "category": "刷题", "duration_min": 60, "deadline": "2026-11-22T23:59:00", "priority": 2},
-    {"title": "CS50 第 3 讲 视频+笔记", "category": "CS50", "duration_min": 45, "deadline": "2026-11-22T23:59:00", "priority": 3},
+    {
+        "title": title,
+        "category": category,
+        "duration_min": duration_min,
+        "deadline": (_TODAY + timedelta(days=k)).strftime("%Y-%m-%dT23:59:00"),
+        "priority": priority,
+    }
+    for k, (title, category, duration_min, priority) in enumerate(_SEED_TASK_SPECS, start=2)
 ]
 
 # ---------------------------------------------------------------- 时间模型
