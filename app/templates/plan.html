@@ -56,13 +56,30 @@
     <div id="today-list"></div>
   </section>
 
-  <!-- ⑧ 没排下的任务：有才显示 -->
+  <!-- ⑧ 本周统计 + 导出（数据来自 /api/stats/week） -->
+  <section id="stats-section" hidden>
+    <h3>本周统计</h3>
+    <article class="stats-card">
+      <div class="stats-grid">
+        <div><strong id="stat-week-scheduled">–</strong><small>已排任务</small></div>
+        <div><strong id="stat-week-done">–</strong><small>已完成</small></div>
+        <div><strong id="stat-week-unscheduled">–</strong><small>未排</small></div>
+        <div><strong id="stat-week-minutes">–</strong><small>已排总时长</small></div>
+      </div>
+      <footer>
+        <!-- 导出必须是普通链接：浏览器直接下载 .md，不要用 fetch -->
+        <a id="export-link" href="/api/export.md" role="button" class="secondary">导出周报（.md）</a>
+      </footer>
+    </article>
+  </section>
+
+  <!-- ⑨ 没排下的任务：有才显示 -->
   <section id="unscheduled-section" hidden>
     <h3>没排下的任务</h3>
     <ul id="unscheduled-list" class="unscheduled-list"></ul>
   </section>
 
-  <!-- ⑨ 本周安排：按天竖着排 -->
+  <!-- ⑩ 本周安排：按天竖着排 -->
   <section id="week-section" hidden>
     <h3>本周安排</h3>
     <div id="week-days"></div>

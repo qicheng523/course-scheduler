@@ -284,11 +284,67 @@ footer small {
 
 .block-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 0.6rem;
+  row-gap: 0.25rem;
   padding: 0.55rem 0;
   border-bottom: 1px solid #e5e7eb;
   min-width: 0;
+}
+
+/* 已打卡的任务：整行变灰、标题划掉 */
+.block-item.checked {
+  opacity: 0.55;
+}
+
+.block-item.checked .block-title {
+  text-decoration: line-through;
+}
+
+/* 打卡按钮：手指点得中，挤不下时自动换到下一行右侧 */
+.checkin-button {
+  margin: 0 0 0 auto;
+  min-height: 44px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+/* ------------------------------------------------ 本周统计 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.stats-grid > div {
+  min-width: 0;
+  padding: 0.5rem 0.25rem;
+  background: #f8fafc;
+  border-radius: 0.5rem;
+}
+
+.stats-grid strong {
+  display: block;
+  font-size: 1.35rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.stats-grid small {
+  color: #6b7280;
+}
+
+.stats-card footer {
+  margin-top: 0.75rem;
+}
+
+#export-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0;
 }
 
 .block-item:last-child {

@@ -7,6 +7,9 @@
 
   const API_PLAN = "/api/plan/";
   const API_GENERATE = "/api/plan/generate";
+  const API_CHECKIN = "/api/checkin";
+  const API_STATS = "/api/stats/week";
+  const API_EXPORT = "/api/export.md";
 
   const DAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
   const KIND_LABELS = { course: "课", fixed: "固定事件", task: "任务" };
@@ -32,7 +35,13 @@
     unscheduledSection: document.getElementById("unscheduled-section"),
     unscheduledList: document.getElementById("unscheduled-list"),
     weekSection: document.getElementById("week-section"),
-    weekDays: document.getElementById("week-days")
+    weekDays: document.getElementById("week-days"),
+    statsSection: document.getElementById("stats-section"),
+    statWeekScheduled: document.getElementById("stat-week-scheduled"),
+    statWeekDone: document.getElementById("stat-week-done"),
+    statWeekUnscheduled: document.getElementById("stat-week-unscheduled"),
+    statWeekMinutes: document.getElementById("stat-week-minutes"),
+    exportLink: document.getElementById("export-link")
   };
 
   // ---------------------------------------------------------------- 日期小工具
@@ -93,6 +102,7 @@
     els.weekSection.hidden = !hasContent;
     if (!hasContent) {
       els.unscheduledSection.hidden = true;
+      els.statsSection.hidden = true;
     }
   }
 
@@ -107,6 +117,76 @@
       return data.detail;
     }
     return "操作失败（状态码 " + status + "），请稍后再试";
+  }
+
+  // ---------------------------------------------------------------- 打卡
+  // 服务端没有"查这一周打了哪些卡"的接口（只有 PATCH /api/checkin），
+  // 所以"刷新后还是已打卡"靠浏览器本地存储记住。
+  // 同一台电脑、同一个浏览器有效；换浏览器会显示成未打卡。
+  function checkinKey(block) {
+    return "checkin:" + block.date + ":" + block.task_id;
+  }
+
+  function isChecked(block) {
+    try {
+      return window.localStorage.getItem(checkinKey(block)) === "1";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function rememberChecked(block) {
+    try {
+      window.localStorage.setItem(checkinKey(block), "1");
+    } catch (error) {
+      // 浏览器禁用本地存储时忽略：本次页面仍然显示已打卡
+    }
+  }
+
+  function setCheckinButtonState(button, checked) {
+    button.textContent = checked ? "已打卡 ✅" : "打卡";
+    button.disabled = checked;
+    button.classList.toggle("is-checked", checked);
+  }
+
+  async function checkIn(block, button, item) {
+    button.disabled = true;
+    button.textContent = "打卡中…";
+
+    let response;
+    try {
+      response = await fetch(API_CHECKIN, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task_id: block.task_id, date: block.date })
+      });
+    } catch (error) {
+      setCheckinButtonState(button, false);
+      showMessage("连不上后台，请确认终端里还在运行 Uvicorn。", true);
+      return;
+    }
+
+    if (!response.ok) {
+      const data = await response.json().catch(function () { return {}; });
+      setCheckinButtonState(button, false);
+      showMessage(toChineseDetail(data, response.status), true);
+      return;
+    }
+
+    const data = await response.json().catch(function () { return {}; });
+    // created=false = 今天已经打过卡，接口幂等：照样显示已打卡，不报错
+    rememberChecked(block);
+    setCheckinButtonState(button, true);
+    item.classList.add("checked");
+
+    if (data.created === false) {
+      showMessage("这个任务今天已经打过卡了（不会重复计数）。", false);
+    } else {
+      showMessage("已打卡：「" + block.title + "」", false);
+    }
+
+    // 打卡后统计的"已完成"要立刻跟着变
+    loadStats();
   }
 
   // ---------------------------------------------------------------- 画一块时间
@@ -129,6 +209,26 @@
     item.appendChild(time);
     item.appendChild(title);
     item.appendChild(badge);
+
+    // 只有任务块能打卡；课和固定事件没有 task_id
+    if (block.kind === "task" && block.task_id != null) {
+      const checked = isChecked(block);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "checkin-button";
+      setCheckinButtonState(button, checked);
+
+      if (checked) {
+        item.classList.add("checked");
+      } else {
+        button.addEventListener("click", function () {
+          checkIn(block, button, item);
+        });
+      }
+
+      item.appendChild(button);
+    }
+
     return item;
   }
 
@@ -236,6 +336,59 @@
     renderToday(blocks, today);
     renderUnscheduled(data.unscheduled || []);
     renderWeek(blocks, today);
+
+    // 导出链接跟着当前周走（普通 <a>，浏览器直接下载）
+    els.exportLink.href = API_EXPORT + "?week_start=" + weekStart;
+  }
+
+  // ---------------------------------------------------------------- 本周统计
+  let latestStatsRequest = 0;
+
+  function formatMinutes(total) {
+    const minutes = Number(total) || 0;
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    if (hours === 0) { return minutes + " 分钟"; }
+    if (rest === 0) { return hours + " 小时"; }
+    return hours + " 小时 " + rest + " 分钟";
+  }
+
+  async function loadStats() {
+    const requestId = latestStatsRequest + 1;
+    latestStatsRequest = requestId;
+    const week = weekStart;
+
+    els.statsSection.hidden = true;
+
+    let response;
+    try {
+      response = await fetch(API_STATS + "?week_start=" + week);
+    } catch (error) {
+      if (requestId !== latestStatsRequest) { return; }
+      showMessage("统计加载失败：连不上后台。", true);
+      return;
+    }
+    if (requestId !== latestStatsRequest || week !== weekStart) { return; }
+
+    if (!response.ok) {
+      const data = await response.json().catch(function () { return {}; });
+      // 404 = 这一周没有计划，属于正常状态，不弹红字
+      if (response.status !== 404) {
+        showMessage(toChineseDetail(data, response.status), true);
+      }
+      return;
+    }
+
+    const data = await response.json();
+    if (requestId !== latestStatsRequest || week !== weekStart) { return; }
+
+    const totals = data.totals || {};
+    els.statWeekScheduled.textContent = totals.scheduled == null ? 0 : totals.scheduled;
+    els.statWeekDone.textContent = totals.done == null ? 0 : totals.done;
+    els.statWeekUnscheduled.textContent = totals.unscheduled == null ? 0 : totals.unscheduled;
+    els.statWeekMinutes.textContent = formatMinutes(totals.planned_minutes);
+
+    els.statsSection.hidden = false;
   }
 
   // ---------------------------------------------------------------- 拉数据
@@ -294,6 +447,7 @@
 
     renderPlan(data);
     showState("content");
+    loadStats();
   }
 
   // ---------------------------------------------------------------- 生成计划
