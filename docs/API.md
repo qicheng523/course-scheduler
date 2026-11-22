@@ -1,4 +1,4 @@
-# API · 三个人的合同（v0.6，2026-11-21 更新；v0.1 于 11-17 冻结）
+# API · 三个人的合同（v0.7，2026-11-22 更新；v0.1 于 11-17 冻结）
 
 > **这份文件是 A、B、C 三个人共同的约定。** 谁都不许自己偷偷改字段名。
 > 改一行 → 群里说 → 改这里 → 记一行变更 → 通知另外两个人。
@@ -269,6 +269,7 @@ Content-Type: application/json
 | `blocks` | 数组 | 这一周的**所有占用块**：课、固定事件、已排任务，**按 `date`、`start` 升序** |
 | `blocks[].kind` | 文本 | 只有 `course` / `fixed` / `task` 三种（**不返回 `free`**，空闲段用 `/api/slots` 查） |
 | `blocks[].task_id` | 整数或 null | 只有 `kind="task"` 时有值 |
+| `blocks[].done` | **布尔** | `kind="task"` 时：这个任务**这一天**有没有打过卡（查 `checkin` 的 `(task_id, date)`）；其他 kind 一律 `false` |
 | `blocks[].title` | 文本 | 课名 / 事件名 / 任务标题，页面直接显示 |
 | `unscheduled` | 数组 | 没排进去的任务，**每条必须有 `reason`**（中文、能直接给人看） |
 | `stats` | 对象 | `scheduled` / `unscheduled` 两个计数 |
@@ -294,6 +295,8 @@ GET /api/plan/2026-11-16
 - A 的计划页只调这一个接口就能把整周画出来；要"重新生成"就调 ⑥ 再调 ⑦。
 
 > **`blocks` 里不放 `free`** 是故意的：页面画"课 + 事件 + 任务"三种实块，空档另用 `/api/slots` 画浅色背景，两者不会打架。
+>
+> **`blocks[].done` 是"打卡状态"的唯一真源（v0.7 新增）。** 页面**不许**用浏览器 `localStorage` 记打卡 —— 换浏览器、清缓存、换电脑都会和数据库对不上。刷新页面后 `✅` 必须来自这个字段。
 
 ### ⑧ 打卡（v0.6 新增，D8；**幂等**是重点）
 
@@ -432,3 +435,4 @@ GET /api/export.md?week_start=2026-11-23
 | 2026-11-18 | **v0.4：新增 §3⑤ `/api/slots` 返回格式**（`items/start/end/minutes/kind/total`，`kind` 只许 `free`/`evening`，五条保证 + 两条错误码）；同时把 §4 残留的 18:00–20:35 改成 19:00–21:00、标题更新到 v0.4 | 总纲代拟，C 确认 |
 | 2026-11-20 | **v0.5：新增 §3⑥ `POST /api/plan/generate` 与 §3⑦ `GET /api/plan/{week_start}` 的返回格式**（`plan_id/week_start/blocks/unscheduled/stats`，blocks 只含 course/fixed/task，不含 free；七条保证：零重叠、单块 15–120、不跨晚自习边界、范围 07:30–21:30、排序确定可复现、同周再生成覆盖旧计划、排不下必须写 reason） | 总纲代拟，C 确认 |
 | 2026-11-21 | **v0.6：新增 §3⑧ `PATCH /api/checkin`（幂等）、§3⑨ `GET /api/stats/week`（4 个指标 + 固定 7 条 by_day）、§3⑩ `GET /api/export.md`（UTF-8 Markdown，结构冻结）** | 总纲代拟，C 确认 |
+| 2026-11-22 | **v0.7：§3⑥/⑦ 的 `blocks[]` 增加 `done`（布尔）**——打卡状态的唯一真源；页面禁止用 `localStorage` 记打卡（换浏览器就和数据库对不上） | 总纲代拟，C 确认 |
