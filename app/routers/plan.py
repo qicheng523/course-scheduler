@@ -76,9 +76,17 @@ def _title_maps(
 
 
 def _block_to_json(
-    row: Block, course_titles: dict, fixed_titles: dict, task_titles: dict
+    row: Block,
+    course_titles: dict,
+    fixed_titles: dict,
+    task_titles: dict,
+    checked_keys: set[tuple[int, str]] | None = None,
 ) -> dict:
-    """把 block 表的一行转成接口格式（时间变回 "HH:mm"）。"""
+    """把 block 表的一行转成接口格式（时间变回 "HH:mm"）。
+
+    checked_keys 是已打卡的 (task_id, date) 集合：只有 task 块且命中时才 done=True，
+    其余（course / fixed，以及还没打卡的 task）一律 done=False。
+    """
     weekday = date_cls.fromisoformat(row.date).isoweekday()
     key = (weekday, row.start_min, row.end_min)
 
@@ -89,6 +97,13 @@ def _block_to_json(
     else:
         title = fixed_titles.get(key, "固定事件")
 
+    done = (
+        row.kind == "task"
+        and row.task_id is not None
+        and checked_keys is not None
+        and (row.task_id, row.date) in checked_keys
+    )
+
     return {
         "id": row.id,
         "date": row.date,
@@ -97,6 +112,7 @@ def _block_to_json(
         "kind": row.kind,
         "task_id": row.task_id,
         "title": title,
+        "done": done,
     }
 
 
@@ -259,8 +275,11 @@ def generate_plan(
 
     rows = _load_week_blocks(session, plan.id)
     course_titles, fixed_titles, task_titles = _title_maps(courses, events, tasks)
+    checkins = session.exec(select(Checkin)).all()
+    checked_keys = {(c.task_id, c.date) for c in checkins}
     blocks_json = [
-        _block_to_json(row, course_titles, fixed_titles, task_titles) for row in rows
+        _block_to_json(row, course_titles, fixed_titles, task_titles, checked_keys)
+        for row in rows
     ]
     scheduled_ids = {row.task_id for row in rows if row.kind == "task"}
 
@@ -298,8 +317,11 @@ def get_plan(
 
     rows = _load_week_blocks(session, plan.id)
     course_titles, fixed_titles, task_titles = _title_maps(courses, events, tasks)
+    checkins = session.exec(select(Checkin)).all()
+    checked_keys = {(c.task_id, c.date) for c in checkins}
     blocks_json = [
-        _block_to_json(row, course_titles, fixed_titles, task_titles) for row in rows
+        _block_to_json(row, course_titles, fixed_titles, task_titles, checked_keys)
+        for row in rows
     ]
 
     scheduled_ids = {row.task_id for row in rows if row.kind == "task"}

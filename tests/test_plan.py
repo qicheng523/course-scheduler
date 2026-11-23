@@ -203,3 +203,51 @@ def test_long_task_is_split_within_block_limits():
     minutes = [to_min(b["end"]) - to_min(b["start"]) for b in blocks]
     assert sum(minutes) == 150
     assert all(15 <= m <= 120 for m in minutes)
+
+
+def test_blocks_include_done_field_default_false():
+    client = build_client()
+    body = generate(client)
+
+    assert body["blocks"], "blocks 不能为空"
+    for block in body["blocks"]:
+        assert "done" in block, f"block 缺 done 字段：{block}"
+        assert block["done"] is False, f"打卡前 done 应为 False：{block}"
+
+    got = client.get(f"/api/plan/{WEEK_START}")
+    assert got.status_code == 200
+    for block in got.json()["blocks"]:
+        assert "done" in block, f"GET 返回的 block 缺 done 字段：{block}"
+        assert block["done"] is False, f"打卡前 done 应为 False：{block}"
+
+
+def test_checkin_updates_block_done_to_true():
+    client = build_client()
+    body = generate(client)
+
+    task_blocks = [b for b in body["blocks"] if b["kind"] == "task"]
+    assert task_blocks, "计划里至少要有一个 task 块"
+    first = task_blocks[0]
+    tid, dt = first["task_id"], first["date"]
+    assert tid is not None
+
+    response = client.patch("/api/checkin", json={"task_id": tid, "date": dt})
+    assert response.status_code == 200, response.text
+
+    got = client.get(f"/api/plan/{WEEK_START}")
+    assert got.status_code == 200
+    blocks = got.json()["blocks"]
+
+    marked = [
+        b for b in blocks
+        if b["kind"] == "task" and b["task_id"] == tid and b["date"] == dt
+    ]
+    assert marked, "打卡后应该还能在 blocks 里找到这个 task 块"
+    assert all(b["done"] is True for b in marked), "打卡的那个块 done 应为 True"
+
+    others = [
+        b for b in blocks
+        if b["kind"] == "task" and not (b["task_id"] == tid and b["date"] == dt)
+    ]
+    assert others, "还应有其他未打卡的 task 块"
+    assert all(b["done"] is False for b in others), "其他未打卡 task 块 done 应为 False"

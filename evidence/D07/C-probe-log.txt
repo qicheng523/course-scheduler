@@ -1,0 +1,147 @@
+========================================================================
+D07 C 角色实测 · 真库 data/app.db · 真服务 127.0.0.1:8000
+========================================================================
+
+■ 步骤 0：/api/courses 默认加课时间（周一 17:50-18:50）不再 409
+POST /api/courses  ->  HTTP 201
+{
+  "id": 20,
+  "name": "晚间自习课",
+  "weekday": 1,
+  "start": "17:50",
+  "end": "18:50",
+  "location": "教1"
+}
+DELETE /api/courses/20  ->  HTTP 204（删掉测试课，保持 seed 19 门干净）
+
+■ 步骤 1 前置：生成 2026-11-16 这一周的计划
+POST /api/plan/generate  ->  HTTP 201
+  plan_id=1  blocks=45  stats={'scheduled': 5, 'unscheduled': 0}
+
+■ 步骤 2：GET /api/stats/week
+GET /api/stats/week?week_start=2026-11-16  ->  HTTP 200
+{
+  "week_start": "2026-11-16",
+  "totals": {
+    "scheduled": 5,
+    "done": 0,
+    "unscheduled": 0,
+    "planned_minutes": 375
+  },
+  "by_day": [
+    {
+      "date": "2026-11-16",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 90
+    },
+    {
+      "date": "2026-11-17",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 60
+    },
+    {
+      "date": "2026-11-18",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 120
+    },
+    {
+      "date": "2026-11-19",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 60
+    },
+    {
+      "date": "2026-11-20",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 45
+    },
+    {
+      "date": "2026-11-21",
+      "tasks": 0,
+      "done": 0,
+      "minutes": 0
+    },
+    {
+      "date": "2026-11-22",
+      "tasks": 0,
+      "done": 0,
+      "minutes": 0
+    }
+  ],
+  "by_category": [
+    {
+      "category": "项目",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 120
+    },
+    {
+      "category": "作业",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 90
+    },
+    {
+      "category": "C语言",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 60
+    },
+    {
+      "category": "刷题",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 60
+    },
+    {
+      "category": "CS50",
+      "tasks": 1,
+      "done": 0,
+      "minutes": 45
+    }
+  ]
+}
+
+■ 步骤 3：PATCH /api/checkin 打卡第一个 task 块
+  第一个 task 块：task_id=1 date=2026-11-16 19:00-20:30 「线性代数第二章习题」
+PATCH /api/checkin  ->  HTTP 200
+{
+  "task_id": 1,
+  "date": "2026-11-16",
+  "done_at": "2026-11-23T19:38:54",
+  "note": null,
+  "created": true
+}
+
+■ 步骤 4：无痕复验（重新 GET /api/plan/{week_start}，不依赖任何浏览器本地存储）
+GET /api/plan/2026-11-16  ->  HTTP 200
+  打卡块 done=[True]  （期望 [True]）
+  其余 task 块 done 全为 False：True（共 4 块）
+
+■ 步骤 5：GET /api/export.md 导出 Markdown 周报
+GET /api/export.md?week_start=2026-11-16  ->  HTTP 200
+  content-type: None
+  content-disposition: None
+  已写入 D:\dsh-workspaces\课表排程工作区\evidence\D07\C-export.md（383 字符）
+    # 课表排程周报 · 2026-11-16 ~ 2026-11-22
+    
+    ## 概览
+    
+    - 已排任务：5 个 / 375 分钟
+    - 已完成：1 个
+    - 没排下：0 个
+    
+    ## 每天安排
+    
+    ### 周一 11-16
+    - 19:00–20:30 线性代数第二章习题 ✅
+    ### 周二 11-17
+    - 19:00–20:00 指针练习 10 题
+
+========================================================================
+全部断言通过 ✅
+========================================================================
