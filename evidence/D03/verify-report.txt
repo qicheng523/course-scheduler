@@ -18,7 +18,7 @@ D3 验收报告（tools/verify_d03.py 自动生成）
 [C] C6 PASS 场景3 周六·只有课 → 1 整段  —— 1 段
 [C] C7 PASS 场景4 周六·课+固定事件 → 2 段  —— 2 段
 [C] C8 PASS 场景5 周日·课+固定事件 → 1 整段  —— 1 段
-[C] C9 PASS pytest 全绿且 ≥13 passed  —— passed=47 failed=0；47 passed in 2.43s
+[C] C9 PASS pytest 全绿且 ≥13 passed  —— passed=49 failed=0；49 passed in 3.78s
 [C] C10 PASS 真库（灌过 seed）周四 = 场景2 的 5 段
 [P] P1 PASS app/services/scheduler.py 存在
 [P] P2 PASS plan.py 里有 POST /api/plan/generate
@@ -28,11 +28,11 @@ D3 验收报告（tools/verify_d03.py 自动生成）
 [P] P6 PASS GET /api/plan/{week_start} 和 generate 一致  —— 状态码 200，块 45
 [P] P7 PASS 连跑两次结果完全一样（不许随机）
 [P] P8 PASS 零重叠 / 15–120 分钟 / 不跨晚自习 / 不晚于截止 / 按序
-[V] V1 FAIL blocks[] 带 done 字段（打卡状态以服务端为准）  —— blocks 里没有 done → 页面只能用 localStorage 记打卡
+[V] V1 PASS blocks[] 带 done 字段（打卡状态以服务端为准）
 [K] K1 PASS 打卡第一次 200 + created=true  —— 状态码 200，created=True
 [K] K2 PASS 同任务同天再打：仍然是 200 + created=false  —— 状态码 200，created=False
 [K] K3 PASS 重复打卡后 checkin 表只有 1 条  —— 1 条
-[V] V2 FAIL 打完卡后 blocks[] 里那一块 done=true（刷新能记住）  —— get plan 里这一块的 done 不是 true
+[V] V2 PASS 打完卡后 blocks[] 里那一块 done=true（刷新能记住）
 [K] K4 PASS 打卡不存在的任务 → 404 中文  —— 状态码 404
 [K] K5 PASS 日期格式错 → 422 中文  —— 状态码 422
 [T] T1 PASS stats 200 + totals 四个指标齐全  —— 状态码 200，totals={'scheduled': 5, 'done': 1, 'unscheduled': 0, 'planned_minutes': 375}
@@ -42,12 +42,12 @@ D3 验收报告（tools/verify_d03.py 自动生成）
 [E] E2 PASS Markdown 四个标题齐全
 [E] E3 PASS 7 天小节都在（含没有安排的那天）  —— 7 个天小节
 [E] E4 PASS 没有计划的周 → 404 中文  —— 状态码 404
-[P] P9 PASS pytest 全绿且 ≥23 passed  —— passed=47 failed=0
-[P] P10 PASS pytest 全绿且 ≥36 passed（今天加了打卡/统计/导出）  —— passed=47 failed=0
+[P] P9 PASS pytest 全绿且 ≥23 passed  —— passed=49 failed=0
+[P] P10 PASS pytest 全绿且 ≥36 passed（今天加了打卡/统计/导出）  —— passed=49 failed=0
 [U] U1 PASS 导航里有「计划」入口
 [U] U2 PASS 打卡按钮接了 PATCH /api/checkin
 [U] U3 PASS 统计卡接了 GET /api/stats/week
 [U] U4 PASS 导出按钮指向 /api/export.md
 [U] U5 FAIL plan.js 不用 localStorage 记打卡（打卡状态只认服务端 done）  —— 还有 localStorage：换浏览器就和数据库对不上
 
-合计：PASS 46 / FAIL 3 / WARN 0
+合计：PASS 48 / FAIL 1 / WARN 0
