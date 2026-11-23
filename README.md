@@ -2,7 +2,7 @@
 
 把真实课表输进去 → 系统算出每天哪些时间是空的 → 把作业/复习任务自动排进这些空档 → 出一份"这周该干什么"的报告 → 能打卡 → 能导出成文字。
 
-**当前状态（2026-11-22）**：功能已经跑通，`pytest` 47 个测试全绿。
+**当前状态（2026-11-23）**：功能已经跑通，`pytest` 49 个测试全绿。
 课程管理、空闲段计算、自动排程、周报告、打卡、周统计、Markdown 导出都能用。
 
 > 只想赶紧看到网页？跳到 §3，照着敲 4 条命令，5 分钟能开起来。
@@ -25,7 +25,7 @@
 
 | 需要 | 说明 |
 |---|---|
-| Windows 10/11（macOS / Linux 也能跑，命令里把 `\` 换成 `/`） | 下面所有命令都以 Windows 为例 |
+| Windows 10/11（macOS / Linux 也能跑，命令里把 `\` 换成 `/`，虚拟环境 Python 为 `.venv/bin/python`） | 下面所有命令都以 Windows PowerShell 为例 |
 | Python **3.12** | 装的时候**必须勾选 `Add python.exe to PATH`** |
 | 一个浏览器 | Edge / Chrome 都行 |
 | 约 200 MB 磁盘 | 依赖 + 数据库 |
@@ -43,7 +43,7 @@
 
 > 也可以用 Win 键 → 输入 `powershell` → 回车，然后手动进入文件夹：
 > ```powershell
-> cd "D:\dsh-workspaces\课表排程工作区"
+> cd "课表排程工作区"  # 换成你实际保存项目的完整文件夹路径
 > ```
 
 **确认站对了地方**（这一步最容易出错）：
@@ -52,7 +52,7 @@
 Get-ChildItem requirements.txt
 ```
 
-看到列出 `requirements.txt` 就是对的。如果报"找不到路径"，说明你不在项目文件夹里，回到上一步。
+看到列出 `requirements.txt` 就是对的（macOS / Linux 可用 ls requirements.txt）。如果报"找不到路径"，说明你不在项目文件夹里，回到上一步。
 
 ### 3.2 创建虚拟环境 + 装依赖（只做一次）
 
@@ -119,7 +119,7 @@ http://127.0.0.1:8000/
 ## 4 第二次以后怎么启动（只要 3 步）
 
 ```powershell
-cd "D:\dsh-workspaces\课表排程工作区"          # ① 进项目文件夹
+cd "课表排程工作区"                            # ① 进项目文件夹（换成你的实际路径）
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload   # ② 启动
 ```
 
@@ -167,7 +167,7 @@ cd "D:\dsh-workspaces\课表排程工作区"          # ① 进项目文件夹
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-成功标志：**`47 passed`**，0 failed。
+成功标志：**`49 passed`**，0 failed。
 测试全部使用内存数据库，**不会动 `data/app.db`**，可以随便跑。
 
 环境自检（依赖装没装全）：
@@ -189,7 +189,7 @@ cd "D:\dsh-workspaces\课表排程工作区"          # ① 进项目文件夹
 | 页面一片空白，或所有按钮都没反应 | 静态文件（`app/static/`）没加载 | 按 `F12` 看 Console 的红色报错，整段截图 |
 | 中文变乱码 | 终端编码不是 UTF-8 | 先执行 `chcp 65001` 再跑命令（不影响数据库） |
 | 改了数据库，页面没变 | 浏览器缓存 | `Ctrl + F5` 强刷 |
-| `Failed to connect to github.com:443` | git 没走代理，直连超时 | 确认代理软件开着（本机 Clash 端口 `7897`）；或临时 `git config --unset http.proxy` |
+| `Failed to connect to github.com:443` | git 没走代理，直连超时 | 确认代理软件正常运行（或配置了本地代理端口）；若不需要代理可临时 `git config --unset http.proxy` |
 | 装了依赖仍然报缺包 | 用的不是 `.venv` 里的 Python | 所有命令都用 `.\.venv\Scripts\python.exe -m ...` 开头 |
 
 ---
