@@ -75,7 +75,6 @@
   // ---------------------------------------------------------------- 状态变量
   let weekStart = mondayOf(new Date());
   let latestRequest = 0; // 防止快速切周时旧请求覆盖新结果
-  let latestPlanData = null; // 当前画在页面上的计划数据（对账时重画用）
 
   // 网址里带了 ?week=2026-11-16 就用它，刷新后还是这一周
   const query = new URLSearchParams(window.location.search);
@@ -121,54 +120,9 @@
   }
 
   // ---------------------------------------------------------------- 打卡
-  // 服务端没有"查这一周打了哪些卡"的接口（只有 PATCH /api/checkin），
-  // 所以"刷新后还是已打卡"靠浏览器本地存储记住。
-  // 同一台电脑、同一个浏览器有效；换浏览器会显示成未打卡。
-  function checkinKey(block) {
-    return "checkin:" + block.date + ":" + block.task_id;
-  }
-
-  function isChecked(block) {
-    try {
-      return window.localStorage.getItem(checkinKey(block)) === "1";
-    } catch (error) {
-      return false;
-    }
-  }
-
-  function rememberChecked(block) {
-    try {
-      window.localStorage.setItem(checkinKey(block), "1");
-    } catch (error) {
-      // 浏览器禁用本地存储时忽略：本次页面仍然显示已打卡
-    }
-  }
-
-  // 清掉某周（周一起连续 7 天）在浏览器里留下的打卡记录。
-  // 数据库被重置后，服务端说"已完成 = 0"，本地这些记录就是过期的。
-  function clearWeekCheckins(week) {
-    const keys = [];
-    const weekEnd = addDays(week, 6);
-
-    try {
-      for (let index = 0; index < window.localStorage.length; index += 1) {
-        const key = window.localStorage.key(index);
-        if (!key || key.indexOf("checkin:") !== 0) { continue; }
-        const date = key.split(":")[1];
-        if (date >= week && date <= weekEnd) {
-          keys.push(key);
-        }
-      }
-      keys.forEach(function (key) {
-        window.localStorage.removeItem(key);
-      });
-    } catch (error) {
-      return 0;
-    }
-
-    return keys.length;
-  }
-
+  // 打卡状态以服务端为准：/api/plan/{week_start} 的 blocks[].done
+  //（docs/API.md v0.7，合同写明页面不许用 localStorage）。
+  // 换浏览器、开无痕窗口、清缓存，✅ 都来自数据库，不会对不上。
   function setCheckinButtonState(button, checked) {
     button.textContent = checked ? "已打卡 ✅" : "打卡";
     button.disabled = checked;
@@ -201,7 +155,6 @@
 
     const data = await response.json().catch(function () { return {}; });
     // created=false = 今天已经打过卡，接口幂等：照样显示已打卡，不报错
-    rememberChecked(block);
     setCheckinButtonState(button, true);
     item.classList.add("checked");
 
@@ -238,7 +191,7 @@
 
     // 只有任务块能打卡；课和固定事件没有 task_id
     if (block.kind === "task" && block.task_id != null) {
-      const checked = isChecked(block);
+      const checked = block.done === true;
       const button = document.createElement("button");
       button.type = "button";
       button.className = "checkin-button";
@@ -409,19 +362,8 @@
     if (requestId !== latestStatsRequest || week !== weekStart) { return; }
 
     const totals = data.totals || {};
-    const doneCount = Number(totals.done) || 0;
-
-    // 对账：数据库被重置后，服务端"已完成"会归零，但浏览器里可能还留着旧打卡。
-    // 以服务端为准——清掉这一周的本地记录，并重画任务行，让按钮恢复成「打卡」。
-    if (doneCount === 0 && latestPlanData !== null) {
-      const cleared = clearWeekCheckins(week);
-      if (cleared > 0) {
-        renderPlan(latestPlanData);
-      }
-    }
-
     els.statWeekScheduled.textContent = totals.scheduled == null ? 0 : totals.scheduled;
-    els.statWeekDone.textContent = doneCount;
+    els.statWeekDone.textContent = totals.done == null ? 0 : totals.done;
     els.statWeekUnscheduled.textContent = totals.unscheduled == null ? 0 : totals.unscheduled;
     els.statWeekMinutes.textContent = formatMinutes(totals.planned_minutes);
 
@@ -469,7 +411,6 @@
 
     // 404 = 这一周还没生成过计划，这是正常的“空状态”
     if (response.status === 404) {
-      latestPlanData = null;
       showState("empty");
       return;
     }
@@ -483,7 +424,6 @@
     const data = await response.json();
     if (requestId !== latestRequest) { return; }
 
-    latestPlanData = data;
     renderPlan(data);
     showState("content");
     loadStats();
