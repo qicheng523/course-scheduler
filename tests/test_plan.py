@@ -9,16 +9,17 @@
 """
 
 import sys
+from datetime import date as date_cls
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.db import get_session
 from app.main import app
-from app.models import Course, FixedEvent, Task
+from app.models import Block, Checkin, Course, FixedEvent, Plan, Task
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -40,6 +41,18 @@ SEED_TASKS = [
 
 def build_client(extra_tasks=()) -> TestClient:
     """造一个 19 课 + 35 固定事件 + 5 条（+额外）任务的内存库。"""
+    engine = _build_engine(extra_tasks)
+
+    def get_test_session():
+        with Session(engine) as session:
+            yield session
+
+    app.dependency_overrides[get_session] = get_test_session
+    return TestClient(app)
+
+
+def _build_engine(extra_tasks=()):
+    """共享的建库逻辑：build_client / build_client_with_db 都用它。"""
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -64,12 +77,19 @@ def build_client(extra_tasks=()) -> TestClient:
             session.add(Task(**task))
         session.commit()
 
+    return engine
+
+
+def build_client_with_db(extra_tasks=()):
+    """同 build_client，但把内存 engine 一起返回，方便测试直接查库。"""
+    engine = _build_engine(extra_tasks)
+
     def get_test_session():
         with Session(engine) as session:
             yield session
 
     app.dependency_overrides[get_session] = get_test_session
-    return TestClient(app)
+    return TestClient(app), engine
 
 
 @pytest.fixture(autouse=True)
@@ -251,3 +271,231 @@ def test_checkin_updates_block_done_to_true():
     ]
     assert others, "还应有其他未打卡的 task 块"
     assert all(b["done"] is False for b in others), "其他未打卡 task 块 done 应为 False"
+
+
+# ---------------------------------------------------------------- 11-24 新增（v0.8 §3⑪⑫⑬）
+
+def _hhmm(minutes: int) -> str:
+    """把分钟数转回 "HH:mm"（测试里自己算空闲段用）。"""
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def _find_free_slot(blocks: list[dict], target: dict, duration: int = 30):
+    """在 target 同一天找一段不重叠、不跨晚自习、够 duration 分钟的空档。
+
+    返回 (start, end) 两个 "HH:mm" 字符串；找不到返回 None。
+    只用于 PATCH 的正常用例——挑一个肯定合法的目标时间。
+    """
+    date = target["date"]
+    weekday = date_cls.fromisoformat(date).isoweekday()
+    occupied = sorted(
+        (to_min(b["start"]), to_min(b["end"]))
+        for b in blocks
+        if b["date"] == date and b["id"] != target["id"]
+    )
+    for start in range(450, 1290 - duration + 1, 15):
+        end = start + duration
+        if weekday <= 5 and ((start < 1140 < end) or (start < 1260 < end)):
+            continue
+        if any(start < oe and end > os for os, oe in occupied):
+            continue
+        return _hhmm(start), _hhmm(end)
+    return None
+
+
+def test_delete_plan_clears_everything_and_restores_task_status():
+    extra = dict(
+        title="待恢复状态的任务",
+        category="作业",
+        duration_min=30,
+        deadline="2026-11-22T23:59:00",
+        priority=1,
+        status="scheduled",
+    )
+    client, engine = build_client_with_db(extra_tasks=[extra])
+    body = generate(client)
+
+    scheduled_extra = [b for b in body["blocks"] if b["title"] == "待恢复状态的任务"]
+    assert scheduled_extra, "额外的 scheduled 任务应该被排进计划"
+    tid = scheduled_extra[0]["task_id"]
+    dt = scheduled_extra[0]["date"]
+    assert tid is not None
+
+    # 打一次卡，好验证删除时打卡被一起清掉
+    assert client.patch("/api/checkin", json={"task_id": tid, "date": dt}).status_code == 200
+
+    resp = client.delete(f"/api/plan/{WEEK_START}")
+    assert resp.status_code == 204
+
+    got = client.get(f"/api/plan/{WEEK_START}")
+    assert got.status_code == 404
+    assert got.json()["detail"] == "这一周还没有计划"
+
+    # 直接查内存库：plan / block / checkin 全清空，排过的任务回到 todo
+    with Session(engine) as s:
+        assert s.exec(select(Plan)).all() == []
+        assert s.exec(select(Block)).all() == []
+        assert s.exec(select(Checkin)).all() == []
+        restored = s.get(Task, tid)
+        assert restored is not None
+        assert restored.status == "todo"
+
+
+def test_delete_plan_missing_week_returns_404():
+    client = build_client()
+    resp = client.delete("/api/plan/2026-12-07")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "这一周还没有计划"
+
+
+def test_create_and_list_tasks():
+    client = build_client()
+    payload = {
+        "title": "线性代数第三章",
+        "category": "作业",
+        "duration_min": 60,
+        "deadline": "2026-11-25T23:59:00",
+        "priority": 2,
+    }
+    resp = client.post("/api/tasks", json=payload)
+    assert resp.status_code == 201, resp.text
+    created = resp.json()
+    assert isinstance(created["id"], int)
+    assert created["status"] == "todo"
+    assert created["title"] == "线性代数第三章"
+    assert created["category"] == "作业"
+    assert created["duration_min"] == 60
+    assert created["deadline"] == "2026-11-25T23:59:00"
+    assert created["priority"] == 2
+
+    got = client.get("/api/tasks")
+    assert got.status_code == 200
+    data = got.json()
+    assert data["total"] == 6  # 5 seed + 1 新增
+    assert [t["title"] for t in data["items"]].count("线性代数第三章") == 1
+
+    # 按状态过滤：新任务和 5 条 seed 都是 todo
+    todo = client.get("/api/tasks", params={"status": "todo"})
+    assert todo.status_code == 200
+    assert todo.json()["total"] == 6
+    done = client.get("/api/tasks", params={"status": "done"})
+    assert done.status_code == 200
+    assert done.json()["total"] == 0
+
+
+def test_create_task_validations():
+    client = build_client()
+    cases = [
+        ({"title": "   ", "category": "作业", "duration_min": 60, "deadline": "2026-11-25T23:59:00", "priority": 2}, "任务名不能为空"),
+        ({"title": "任务", "category": "作业", "duration_min": 0, "deadline": "2026-11-25T23:59:00", "priority": 2}, "预计用时要大于 0 分钟"),
+        ({"title": "任务", "category": "作业", "duration_min": 60, "deadline": "2026-11-25T23:59:00", "priority": 4}, "优先级只能是 1、2、3"),
+        ({"title": "任务", "category": "游戏", "duration_min": 60, "deadline": "2026-11-25T23:59:00", "priority": 2}, "类别只能是 作业 / C语言 / 项目 / 刷题 / CS50"),
+        ({"title": "任务", "category": "作业", "duration_min": 60, "deadline": "2026/11/25 23:59", "priority": 2}, "截止时间要写成 2026-11-25T23:59:00 这样的格式"),
+    ]
+    for payload, detail in cases:
+        resp = client.post("/api/tasks", json=payload)
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["detail"] == detail
+
+
+def test_delete_task_block():
+    client = build_client()
+    body = generate(client)
+    task_blocks = [b for b in body["blocks"] if b["kind"] == "task"]
+    assert task_blocks
+    target = task_blocks[0]
+
+    resp = client.delete(f"/api/block/{target['id']}")
+    assert resp.status_code == 204
+
+    got = client.get(f"/api/plan/{WEEK_START}")
+    assert got.status_code == 200
+    ids = [b["id"] for b in got.json()["blocks"]]
+    assert target["id"] not in ids
+
+
+def test_delete_block_errors():
+    client = build_client()
+    resp = client.delete("/api/block/99999")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "这个时间块不存在"
+
+    body = generate(client)
+    course = next(b for b in body["blocks"] if b["kind"] == "course")
+    resp = client.delete(f"/api/block/{course['id']}")
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "课和固定事件不能改"
+
+
+def test_patch_block_updates_time():
+    client = build_client()
+    body = generate(client)
+    task_blocks = [b for b in body["blocks"] if b["kind"] == "task"]
+    assert task_blocks
+
+    target = None
+    new_start = new_end = None
+    for candidate in task_blocks:
+        slot = _find_free_slot(body["blocks"], candidate)
+        if slot is not None:
+            target = candidate
+            new_start, new_end = slot
+            break
+    assert target is not None, "找不到一个能移动的任务块"
+
+    resp = client.patch(
+        f"/api/block/{target['id']}", json={"start": new_start, "end": new_end}
+    )
+    assert resp.status_code == 200, resp.text
+    updated = resp.json()
+    assert updated["id"] == target["id"]
+    assert updated["start"] == new_start
+    assert updated["end"] == new_end
+    assert "done" in updated
+
+    # GET plan 里也同步更新了
+    got = client.get(f"/api/plan/{WEEK_START}")
+    block = next(b for b in got.json()["blocks"] if b["id"] == target["id"])
+    assert block["start"] == new_start
+    assert block["end"] == new_end
+
+
+def test_patch_block_validations():
+    client = build_client()
+    body = generate(client)
+    task_blocks = [b for b in body["blocks"] if b["kind"] == "task"]
+    assert task_blocks
+    target = task_blocks[0]
+
+    # 1. 超出 07:30–21:30
+    resp = client.patch(f"/api/block/{target['id']}", json={"start": "07:00", "end": "08:00"})
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"] == "时间要落在 07:30–21:30 之内"
+
+    # 2. 时长不足 15 分钟
+    resp = client.patch(f"/api/block/{target['id']}", json={"start": "08:00", "end": "08:10"})
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"] == "任务块要在 15–120 分钟之间"
+
+    # 3. 跨 19:00（晚自习边界只在工作日校验）
+    weekday_target = next(
+        (b for b in task_blocks if date_cls.fromisoformat(b["date"]).isoweekday() <= 5),
+        target,
+    )
+    resp = client.patch(
+        f"/api/block/{weekday_target['id']}", json={"start": "18:30", "end": "19:30"}
+    )
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"] == "任务块不能跨过晚自习边界"
+
+    # 4. 与同一天课程重叠 → 409，带课名
+    course = next(
+        b for b in body["blocks"]
+        if b["kind"] == "course" and b["date"] == weekday_target["date"]
+    )
+    resp = client.patch(
+        f"/api/block/{weekday_target['id']}",
+        json={"start": course["start"], "end": course["end"]},
+    )
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"] == f"这个时间和「{course['title']}」重叠"

@@ -1,11 +1,16 @@
-"""空闲段 + 周计划 + 打卡 / 统计 / 导出 接口（docs/API.md §3⑤–⑩）。
+"""空闲段 + 周计划 + 打卡 / 统计 / 导出 / 任务 / 移动块 接口（docs/API.md §3⑤–⑬）。
 
-    GET   /api/slots?date=2026-11-19     查某天的空闲段
-    POST  /api/plan/generate             生成/覆盖某一周的计划
-    GET   /api/plan/{week_start}         查某一周已生成的计划
-    PATCH /api/checkin                   打卡（同任务同天幂等）
-    GET   /api/stats/week                这一周的统计（4 个指标 + 恒 7 条 by_day）
-    GET   /api/export.md                 导出这一周的 Markdown 周报
+    GET    /api/slots?date=2026-11-19     查某天的空闲段
+    POST   /api/plan/generate             生成/覆盖某一周的计划
+    GET    /api/plan/{week_start}         查某一周已生成的计划
+    DELETE /api/plan/{week_start}         删一整周计划（连带 blocks + 该周 checkin）
+    PATCH  /api/checkin                   打卡（同任务同天幂等）
+    GET    /api/stats/week                这一周的统计（4 个指标 + 恒 7 条 by_day）
+    GET    /api/export.md                 导出这一周的 Markdown 周报
+    POST   /api/tasks                     新增任务（5 条校验）
+    GET    /api/tasks                     查任务（可按 status 过滤）
+    DELETE /api/block/{id}                删除单个任务块
+    PATCH  /api/block/{id}                移动任务块（5 条校验）
 
 算法都在 `app/services/slots.py`（空闲段）和 `app/services/scheduler.py`（排任务）里，
 这个文件只做：校验参数 → 查库 → 调纯函数 → 写库 → 拼冻结好的 JSON。
@@ -36,6 +41,9 @@ DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # 所以 /api/stats/week 和 /api/export.md 只能给这句通用说明。
 UNPLANNED_REASON = "这一周没有排进去（重新生成一次看具体原因）"
 
+# 任务类别只认这 5 类（docs/API.md §3⑪ 冻结）
+ALLOWED_CATEGORIES = {"作业", "C语言", "项目", "刷题", "CS50"}
+
 # 导出 Markdown 的星期名（周一=1 … 周日=7）
 WEEKDAY_NAMES = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 # 时间区间用短横线 "–"（不是减号），导出结构是冻结的
@@ -46,6 +54,27 @@ class GenerateIn(SQLModel):
     """POST /api/plan/generate 的请求体。"""
 
     week_start: str
+
+
+class TaskCreateIn(SQLModel):
+    """POST /api/tasks 的请求体（docs/API.md §3⑪）。
+
+    故意不放 pydantic 的数值约束：5 条校验要在路由里做，这样
+    detail 才能是「任务名不能为空」这类能直接给用户看的中文。
+    """
+
+    title: str
+    category: str = "作业"
+    duration_min: int
+    deadline: str
+    priority: int = 2
+
+
+class BlockPatchIn(SQLModel):
+    """PATCH /api/block/{id} 的请求体（docs/API.md §3⑬）：只改时间，不改日期。"""
+
+    start: str
+    end: str
 
 
 # ---------------------------------------------------------------- 小工具
@@ -63,6 +92,12 @@ def _parse_date(value: str, example: str = "2026-11-19") -> date_cls:
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(status_code=422, detail=message)
+
+
+def to_min(hhmm: str) -> int:
+    """把 "HH:mm" 转成分钟数（"07:30" → 450）；给 PATCH /api/block 用。"""
+    hour_text, minute_text = hhmm.split(":")
+    return int(hour_text) * 60 + int(minute_text)
 
 
 def _title_maps(
@@ -621,3 +656,208 @@ def export_markdown(
         media_type="text/markdown; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="export-{week_start}.md"'},
     )
+
+
+# ---------------------------------------------------------------- 任务：新增 / 列表（D9，v0.8 §3⑪）
+
+@router.post("/api/tasks", status_code=201)
+def create_task(payload: TaskCreateIn, session: Session = Depends(get_session)) -> dict:
+    """新增一条任务：成功 201，返回带 id、status="todo" 的整条记录。"""
+    if not payload.title or not payload.title.strip():
+        raise HTTPException(status_code=422, detail="任务名不能为空")
+    if payload.duration_min <= 0:
+        raise HTTPException(status_code=422, detail="预计用时要大于 0 分钟")
+    if payload.priority not in (1, 2, 3):
+        raise HTTPException(status_code=422, detail="优先级只能是 1、2、3")
+    if payload.category not in ALLOWED_CATEGORIES:
+        raise HTTPException(status_code=422, detail="类别只能是 作业 / C语言 / 项目 / 刷题 / CS50")
+    try:
+        datetime.fromisoformat(payload.deadline)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="截止时间要写成 2026-11-25T23:59:00 这样的格式")
+
+    task = Task(
+        title=payload.title.strip(),
+        category=payload.category,
+        duration_min=payload.duration_min,
+        deadline=payload.deadline,
+        priority=payload.priority,
+        status="todo",
+    )
+    session.add(task)
+    session.commit()
+    session.refresh(task)
+    return {
+        "id": task.id,
+        "title": task.title,
+        "category": task.category,
+        "duration_min": task.duration_min,
+        "deadline": task.deadline,
+        "priority": task.priority,
+        "status": task.status,
+    }
+
+
+@router.get("/api/tasks")
+def list_tasks(
+    status: str | None = Query(default=None, description="todo / scheduled / done；不传 = 全部"),
+    session: Session = Depends(get_session),
+) -> dict:
+    """查任务：按 id 升序；传 status 就只返回那个状态的任务。"""
+    if status is not None:
+        query = select(Task).where(Task.status == status)
+    else:
+        query = select(Task)
+    tasks = session.exec(query.order_by(Task.id)).all()
+    items = [
+        {
+            "id": task.id,
+            "title": task.title,
+            "category": task.category,
+            "duration_min": task.duration_min,
+            "deadline": task.deadline,
+            "priority": task.priority,
+            "status": task.status,
+        }
+        for task in tasks
+    ]
+    return {"items": items, "total": len(items)}
+
+
+# ---------------------------------------------------------------- 删一周计划（D9，v0.8 §3⑫）
+
+@router.delete("/api/plan/{week_start}", status_code=204)
+def delete_plan(week_start: str, session: Session = Depends(get_session)) -> Response:
+    """删除这一周的计划：plan + 它下面所有 block + 这一周的 checkin 一起清掉，
+    排过的任务 status 回到 todo（done 的不动），下次生成还能再排。"""
+    start_dt = _parse_date(week_start)
+
+    plans = session.exec(select(Plan).where(Plan.week_start == week_start)).all()
+    if not plans:
+        raise HTTPException(status_code=404, detail="这一周还没有计划")
+
+    plan_ids = [p.id for p in plans]
+    blocks = session.exec(select(Block).where(Block.plan_id.in_(plan_ids))).all()
+    task_ids = {b.task_id for b in blocks if b.kind == "task" and b.task_id is not None}
+
+    if task_ids:
+        tasks = session.exec(select(Task).where(Task.id.in_(task_ids))).all()
+        for t in tasks:
+            if t.status != "done":
+                t.status = "todo"
+                session.add(t)
+
+    for b in blocks:
+        session.delete(b)
+
+    end_dt = start_dt + timedelta(days=6)
+    checkins = session.exec(
+        select(Checkin).where(
+            Checkin.date >= start_dt.isoformat(),
+            Checkin.date <= end_dt.isoformat(),
+        )
+    ).all()
+    for c in checkins:
+        session.delete(c)
+
+    for p in plans:
+        session.delete(p)
+
+    session.commit()
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------- 移动 / 删除单个任务块（D9，v0.8 §3⑬）
+
+@router.delete("/api/block/{block_id}", status_code=204)
+def delete_block(block_id: int, session: Session = Depends(get_session)) -> Response:
+    """删除单个任务块：只有 kind="task" 的块能删；删掉后这个任务重新变"未排"。"""
+    block = session.get(Block, block_id)
+    if block is None:
+        raise HTTPException(status_code=404, detail="这个时间块不存在")
+    if block.kind != "task":
+        raise HTTPException(status_code=409, detail="课和固定事件不能改")
+
+    if block.task_id is not None:
+        others = session.exec(
+            select(Block).where(Block.task_id == block.task_id, Block.id != block.id)
+        ).all()
+        if not others:
+            task = session.get(Task, block.task_id)
+            if task is not None and task.status != "done":
+                task.status = "todo"
+                session.add(task)
+
+    session.delete(block)
+    session.commit()
+    return Response(status_code=204)
+
+
+@router.patch("/api/block/{block_id}")
+def patch_block(
+    block_id: int,
+    payload: BlockPatchIn,
+    session: Session = Depends(get_session),
+) -> dict:
+    """移动任务块（只改时间，不改日期）：五条校验一条不过就 422 / 409。"""
+    block = session.get(Block, block_id)
+    if block is None:
+        raise HTTPException(status_code=404, detail="这个时间块不存在")
+    if block.kind != "task":
+        raise HTTPException(status_code=409, detail="课和固定事件不能改")
+
+    start_min = to_min(payload.start)
+    end_min = to_min(payload.end)
+
+    # 1. 时间范围：07:30–21:30，且开始必须早于结束
+    if start_min < WINDOW_START or end_min > WINDOW_END or start_min >= end_min:
+        raise HTTPException(status_code=422, detail="时间要落在 07:30–21:30 之内")
+
+    # 2. 时长：15–120 分钟
+    duration = end_min - start_min
+    if duration < 15 or duration > 120:
+        raise HTTPException(status_code=422, detail="任务块要在 15–120 分钟之间")
+
+    # 3. 晚自习边界：周一到周五不许跨 19:00 / 21:00
+    weekday = date_cls.fromisoformat(block.date).isoweekday()
+    if weekday <= 5:
+        if (start_min < 1140 < end_min) or (start_min < 1260 < end_min):
+            raise HTTPException(status_code=422, detail="任务块不能跨过晚自习边界")
+
+    # 4. 重叠：和同一天（同一份计划）其他块重叠 → 409，带上对方的名字
+    other_blocks = session.exec(
+        select(Block).where(
+            Block.plan_id == block.plan_id,
+            Block.date == block.date,
+            Block.id != block.id,
+        )
+    ).all()
+
+    courses = session.exec(select(Course).where(Course.term == TERM)).all()
+    events = session.exec(select(FixedEvent)).all()
+    tasks = session.exec(select(Task)).all()
+    course_titles, fixed_titles, task_titles = _title_maps(courses, events, tasks)
+
+    for other in other_blocks:
+        if max(start_min, other.start_min) < min(end_min, other.end_min):
+            other_weekday = date_cls.fromisoformat(other.date).isoweekday()
+            key = (other_weekday, other.start_min, other.end_min)
+            if other.kind == "task":
+                conflict_title = task_titles.get(other.task_id, "任务")
+            elif other.kind == "course":
+                conflict_title = course_titles.get(key, "课程")
+            else:
+                conflict_title = fixed_titles.get(key, "固定事件")
+            raise HTTPException(
+                status_code=409, detail=f"这个时间和「{conflict_title}」重叠"
+            )
+
+    block.start_min = start_min
+    block.end_min = end_min
+    session.add(block)
+    session.commit()
+    session.refresh(block)
+
+    checkins = session.exec(select(Checkin)).all()
+    checked_keys = {(c.task_id, c.date) for c in checkins}
+    return _block_to_json(block, course_titles, fixed_titles, task_titles, checked_keys)
