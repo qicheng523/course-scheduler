@@ -18,7 +18,7 @@ D3 验收报告（tools/verify_d03.py 自动生成）
 [C] C6 PASS 场景3 周六·只有课 → 1 整段  —— 1 段
 [C] C7 PASS 场景4 周六·课+固定事件 → 2 段  —— 2 段
 [C] C8 PASS 场景5 周日·课+固定事件 → 1 整段  —— 1 段
-[C] C9 PASS pytest 全绿且 ≥13 passed  —— passed=49 failed=0；49 passed in 3.78s
+[C] C9 PASS pytest 全绿且 ≥13 passed  —— passed=57 failed=0；57 passed in 2.99s
 [C] C10 PASS 真库（灌过 seed）周四 = 场景2 的 5 段
 [P] P1 PASS app/services/scheduler.py 存在
 [P] P2 PASS plan.py 里有 POST /api/plan/generate
@@ -42,12 +42,17 @@ D3 验收报告（tools/verify_d03.py 自动生成）
 [E] E2 PASS Markdown 四个标题齐全
 [E] E3 PASS 7 天小节都在（含没有安排的那天）  —— 7 个天小节
 [E] E4 PASS 没有计划的周 → 404 中文  —— 状态码 404
-[P] P9 PASS pytest 全绿且 ≥23 passed  —— passed=49 failed=0
-[P] P10 PASS pytest 全绿且 ≥36 passed（今天加了打卡/统计/导出）  —— passed=49 failed=0
+[W] W1 PASS 加任务：POST /api/tasks 201 且出现在列表里  —— 状态码 201
+[W] W2 PASS 改块时间：合法改动 200  —— 状态码 200
+[W] W3 PASS 改块时间：跨过 19:00 要 422  —— 状态码 422
+[W] W4 PASS 删任务块：204 且块少一个  —— 状态码 204，块 44/45
+[W] W5 PASS 删周计划：204 且再查 404  —— delete=204，get=404
+[P] P9 PASS pytest 全绿且 ≥23 passed  —— passed=57 failed=0
+[P] P10 PASS pytest 全绿且 ≥36 passed（今天加了打卡/统计/导出）  —— passed=57 failed=0
 [U] U1 PASS 导航里有「计划」入口
 [U] U2 PASS 打卡按钮接了 PATCH /api/checkin
 [U] U3 PASS 统计卡接了 GET /api/stats/week
 [U] U4 PASS 导出按钮指向 /api/export.md
-[U] U5 FAIL plan.js 不用 localStorage 记打卡（打卡状态只认服务端 done）  —— 还有 localStorage：换浏览器就和数据库对不上
+[U] U5 PASS plan.js 不用 localStorage 记打卡（打卡状态只认服务端 done）
 
-合计：PASS 48 / FAIL 1 / WARN 0
+合计：PASS 54 / FAIL 0 / WARN 0
