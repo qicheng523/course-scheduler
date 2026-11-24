@@ -10,6 +10,8 @@
   const API_CHECKIN = "/api/checkin";
   const API_STATS = "/api/stats/week";
   const API_EXPORT = "/api/export.md";
+  const API_TASKS = "/api/tasks";
+  const API_BLOCK = "/api/block/";
 
   const DAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
   const KIND_LABELS = { course: "课", fixed: "固定事件", task: "任务" };
@@ -41,7 +43,18 @@
     statWeekDone: document.getElementById("stat-week-done"),
     statWeekUnscheduled: document.getElementById("stat-week-unscheduled"),
     statWeekMinutes: document.getElementById("stat-week-minutes"),
-    exportLink: document.getElementById("export-link")
+    exportLink: document.getElementById("export-link"),
+    deletePlanButton: document.getElementById("delete-plan-button"),
+    taskSection: document.getElementById("task-section"),
+    taskForm: document.getElementById("task-form"),
+    taskTitle: document.getElementById("task-title"),
+    taskCategory: document.getElementById("task-category"),
+    taskDuration: document.getElementById("task-duration"),
+    taskPriority: document.getElementById("task-priority"),
+    taskDeadline: document.getElementById("task-deadline"),
+    taskSubmit: document.getElementById("task-submit"),
+    taskListBox: document.getElementById("task-list-box"),
+    taskList: document.getElementById("task-list")
   };
 
   // ---------------------------------------------------------------- 日期小工具
@@ -103,6 +116,7 @@
     if (!hasContent) {
       els.unscheduledSection.hidden = true;
       els.statsSection.hidden = true;
+      els.taskSection.hidden = true;
     }
   }
 
@@ -121,7 +135,7 @@
 
   // ---------------------------------------------------------------- 打卡
   // 打卡状态以服务端为准：/api/plan/{week_start} 的 blocks[].done
-  //（docs/API.md v0.7，合同写明页面不许用 localStorage）。
+  //（docs/API.md v0.7：合同要求打卡状态只认服务端）。
   // 换浏览器、开无痕窗口、清缓存，✅ 都来自数据库，不会对不上。
   function setCheckinButtonState(button, checked) {
     button.textContent = checked ? "已打卡 ✅" : "打卡";
@@ -168,6 +182,116 @@
     loadStats();
   }
 
+  // ---------------------------------------------------------------- 任务块：删除 / 改时间
+  async function deleteBlock(block) {
+    const ok = confirm("删除「" + block.title + "」这个时间块？");
+    if (!ok) {
+      return;
+    }
+
+    let response;
+    try {
+      response = await fetch(API_BLOCK + block.id, { method: "DELETE" });
+    } catch (error) {
+      showMessage("连不上后台，这个时间块没有删。", true);
+      return;
+    }
+
+    if (response.status === 204) {
+      showMessage("已删除这个时间块。", false);
+      await loadPlan();
+      return;
+    }
+
+    if (response.status === 404) {
+      showMessage("删不了：后端还没有这个接口（等 C 推送），或这个块已经不存在。", true);
+      return;
+    }
+
+    const data = await response.json().catch(function () { return {}; });
+    showMessage(toChineseDetail(data, response.status), true);
+  }
+
+  function openBlockEditor(block, item) {
+    // 已经打开一个编辑器就不再重复开
+    if (item.nextElementSibling && item.nextElementSibling.classList.contains("block-editor")) {
+      return;
+    }
+
+    const editor = document.createElement("form");
+    editor.className = "block-editor";
+
+    const startLabel = document.createElement("label");
+    startLabel.textContent = "开始";
+    const startInput = document.createElement("input");
+    startInput.type = "time";
+    startInput.value = block.start;
+    startInput.required = true;
+    startLabel.appendChild(startInput);
+
+    const endLabel = document.createElement("label");
+    endLabel.textContent = "结束";
+    const endInput = document.createElement("input");
+    endInput.type = "time";
+    endInput.value = block.end;
+    endInput.required = true;
+    endLabel.appendChild(endInput);
+
+    const saveButton = document.createElement("button");
+    saveButton.type = "submit";
+    saveButton.className = "block-action";
+    saveButton.textContent = "保存";
+
+    const cancelButton = document.createElement("button");
+    cancelButton.type = "button";
+    cancelButton.className = "block-action secondary outline";
+    cancelButton.textContent = "取消";
+    cancelButton.addEventListener("click", function () {
+      editor.remove();
+    });
+
+    editor.appendChild(startLabel);
+    editor.appendChild(endLabel);
+    editor.appendChild(saveButton);
+    editor.appendChild(cancelButton);
+
+    editor.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      saveButton.disabled = true;
+
+      let response;
+      try {
+        response = await fetch(API_BLOCK + block.id, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ start: startInput.value, end: endInput.value })
+        });
+      } catch (error) {
+        saveButton.disabled = false;
+        showMessage("连不上后台，时间没有改。", true);
+        return;
+      }
+
+      if (response.ok) {
+        showMessage("已改时间。", false);
+        await loadPlan();
+        return;
+      }
+
+      saveButton.disabled = false;
+
+      if (response.status === 404 || response.status === 405) {
+        showMessage("后端还没有修改时间块的接口（等 C 推送）。", true);
+        return;
+      }
+
+      const data = await response.json().catch(function () { return {}; });
+      showMessage(toChineseDetail(data, response.status), true);
+    });
+
+    item.after(editor);
+  }
+
   // ---------------------------------------------------------------- 画一块时间
   function blockItem(block) {
     const item = document.createElement("div");
@@ -206,6 +330,30 @@
       }
 
       item.appendChild(button);
+
+      // 删除 / 改时间：只给任务块，课和固定事件不能动
+      const actions = document.createElement("span");
+      actions.className = "block-actions";
+
+      const editButton = document.createElement("button");
+      editButton.type = "button";
+      editButton.className = "block-action";
+      editButton.textContent = "改时间";
+      editButton.addEventListener("click", function () {
+        openBlockEditor(block, item);
+      });
+
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "block-action secondary outline";
+      deleteButton.textContent = "删除";
+      deleteButton.addEventListener("click", function () {
+        deleteBlock(block);
+      });
+
+      actions.appendChild(editButton);
+      actions.appendChild(deleteButton);
+      item.appendChild(actions);
     }
 
     return item;
@@ -370,6 +518,129 @@
     els.statsSection.hidden = false;
   }
 
+  // ---------------------------------------------------------------- 加任务 / 删除计划
+  let latestTasksRequest = 0;
+
+  function defaultDeadline() {
+    const date = new Date();
+    date.setDate(date.getDate() + 3);
+    return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) + "T23:59";
+  }
+
+  async function loadTasks() {
+    const requestId = latestTasksRequest + 1;
+    latestTasksRequest = requestId;
+
+    els.taskSection.hidden = false;
+    els.taskListBox.hidden = true;
+
+    let response;
+    try {
+      response = await fetch(API_TASKS);
+    } catch (error) {
+      return;
+    }
+    if (requestId !== latestTasksRequest) { return; }
+
+    // 404/405 = C 的接口还没上：表单照常可用，列表先不显示
+    if (!response.ok) { return; }
+
+    const data = await response.json();
+    if (requestId !== latestTasksRequest) { return; }
+
+    const items = Array.isArray(data) ? data : (Array.isArray(data.items) ? data.items : []);
+    if (items.length === 0) { return; }
+
+    els.taskList.replaceChildren();
+    items.forEach(function (task) {
+      const li = document.createElement("li");
+      const title = document.createElement("strong");
+      title.textContent = task.title;
+      const meta = document.createElement("small");
+      meta.textContent = " · " + (task.category || "作业") +
+        " · " + (task.duration_min || 0) + " 分钟 · 优先级 " + (task.priority || 2);
+      li.appendChild(title);
+      li.appendChild(meta);
+      els.taskList.appendChild(li);
+    });
+    els.taskListBox.hidden = false;
+  }
+
+  async function submitTask(event) {
+    event.preventDefault();
+    els.taskSubmit.disabled = true;
+
+    const rawDeadline = els.taskDeadline.value; // 2026-11-26T23:59
+    const deadline = rawDeadline.length === 16 ? rawDeadline + ":00" : rawDeadline;
+    const payload = {
+      title: els.taskTitle.value.trim(),
+      category: els.taskCategory.value,
+      duration_min: Number(els.taskDuration.value),
+      deadline: deadline,
+      priority: Number(els.taskPriority.value)
+    };
+
+    let response;
+    try {
+      response = await fetch(API_TASKS, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    } catch (error) {
+      els.taskSubmit.disabled = false;
+      showMessage("连不上后台，任务没有加上。", true);
+      return;
+    }
+
+    if (response.status === 201) {
+      els.taskForm.reset();
+      els.taskDeadline.value = defaultDeadline();
+      showMessage("已添加「" + payload.title + "」，点「重新生成本周计划」就能排进去。", false);
+      loadTasks();
+    } else if (response.status === 404 || response.status === 405) {
+      showMessage("后端还没有 /api/tasks 接口（等 C 推送）。", true);
+    } else {
+      const data = await response.json().catch(function () { return {}; });
+      showMessage(toChineseDetail(data, response.status), true);
+    }
+
+    els.taskSubmit.disabled = false;
+  }
+
+  async function deletePlan() {
+    const ok = confirm("删除本周计划？这会一起清掉这一周的打卡记录，任务回到待排状态。");
+    if (!ok) {
+      return;
+    }
+
+    els.deletePlanButton.disabled = true;
+
+    let response;
+    try {
+      response = await fetch(API_PLAN + weekStart, { method: "DELETE" });
+    } catch (error) {
+      els.deletePlanButton.disabled = false;
+      showMessage("连不上后台，计划没有删。", true);
+      return;
+    }
+
+    if (response.status === 204) {
+      showMessage("已删除本周计划，打卡也一起清掉了。", false);
+      showState("empty");
+    } else if (response.status === 404) {
+      showMessage("这一周本来就没有计划。", true);
+      showState("empty");
+    } else if (response.status === 405) {
+      showMessage("后端还没有删除计划的接口（等 C 推送）。", true);
+    } else {
+      const data = await response.json().catch(function () { return {}; });
+      showMessage(toChineseDetail(data, response.status), true);
+    }
+
+    els.deletePlanButton.disabled = false;
+  }
+
   // ---------------------------------------------------------------- 拉数据
   function updateWeekLabel() {
     const start = parseIso(weekStart);
@@ -427,6 +698,7 @@
     renderPlan(data);
     showState("content");
     loadStats();
+    loadTasks();
   }
 
   // ---------------------------------------------------------------- 生成计划
@@ -480,8 +752,11 @@
   document.querySelectorAll(".generate-button").forEach(function (button) {
     button.addEventListener("click", generatePlan);
   });
+  els.deletePlanButton.addEventListener("click", deletePlan);
+  els.taskForm.addEventListener("submit", submitTask);
 
   // ---------------------------------------------------------------- 启动
+  els.taskDeadline.value = defaultDeadline();
   updateWeekLabel();
   loadPlan();
 })();

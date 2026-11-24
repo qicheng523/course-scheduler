@@ -45,8 +45,9 @@
       <div><strong id="stat-unscheduled">–</strong><small>个任务未排</small></div>
       <div><strong id="stat-days">–</strong><small>天有安排</small></div>
     </div>
-    <footer>
+    <footer class="report-actions">
       <button type="button" class="generate-button secondary">重新生成本周计划</button>
+      <button type="button" id="delete-plan-button" class="secondary outline">删除本周计划</button>
     </footer>
   </article>
 
@@ -73,13 +74,65 @@
     </article>
   </section>
 
-  <!-- ⑨ 没排下的任务：有才显示 -->
+  <!-- ⑨ 加任务 + 待排列表（POST/GET /api/tasks） -->
+  <section id="task-section" hidden>
+    <h3>加一个任务</h3>
+    <form id="task-form">
+      <div class="grid">
+        <label>
+          标题
+          <input type="text" id="task-title" maxlength="80" required
+                 placeholder="例如：线性代数第三章习题">
+        </label>
+        <label>
+          类别
+          <select id="task-category">
+            <option value="作业">作业</option>
+            <option value="C语言">C语言</option>
+            <option value="项目">项目</option>
+            <option value="刷题">刷题</option>
+            <option value="CS50">CS50</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="grid">
+        <label>
+          时长（分钟）
+          <input type="number" id="task-duration" min="15" max="480" step="15" value="60" required>
+        </label>
+        <label>
+          优先级
+          <select id="task-priority">
+            <option value="1">1（最高）</option>
+            <option value="2" selected>2</option>
+            <option value="3">3（最低）</option>
+          </select>
+        </label>
+      </div>
+
+      <label>
+        截止时间
+        <input type="datetime-local" id="task-deadline" required>
+      </label>
+
+      <button type="submit" id="task-submit">添加任务</button>
+    </form>
+
+    <div id="task-list-box" hidden>
+      <h4>待排任务</h4>
+      <ul id="task-list"></ul>
+      <p><small>点上面的「重新生成本周计划」就会把它们排进空档。</small></p>
+    </div>
+  </section>
+
+  <!-- ⑩ 没排下的任务：有才显示 -->
   <section id="unscheduled-section" hidden>
     <h3>没排下的任务</h3>
     <ul id="unscheduled-list" class="unscheduled-list"></ul>
   </section>
 
-  <!-- ⑩ 本周安排：按天竖着排 -->
+  <!-- ⑪ 本周安排：按天竖着排 -->
   <section id="week-section" hidden>
     <h3>本周安排</h3>
     <div id="week-days"></div>
