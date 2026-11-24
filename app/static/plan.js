@@ -117,7 +117,11 @@
     if (!hasContent) {
       els.unscheduledSection.hidden = true;
       els.statsSection.hidden = true;
-      els.taskSection.hidden = true;
+      // loading / error 时藏起来；empty 时由 loadTasks 决定
+      //（没有计划也可以先加任务，所以 empty 不能一刀切隐藏）
+      if (state === "loading" || state === "error") {
+        els.taskSection.hidden = true;
+      }
     }
   }
 
@@ -142,6 +146,20 @@
     button.textContent = checked ? "已打卡 ✅" : "打卡";
     button.disabled = checked;
     button.classList.toggle("is-checked", checked);
+  }
+
+  // 同一个任务块在「今天做什么」和「本周安排」各有一份，
+  // 打卡成功后两份都要变，否则页面上会同时出现「已打卡」和「打卡」。
+  function markCheckedEverywhere(block) {
+    const selector = '.block-item[data-task-id="' + block.task_id +
+      '"][data-date="' + block.date + '"]';
+    document.querySelectorAll(selector).forEach(function (row) {
+      row.classList.add("checked");
+      const button = row.querySelector(".checkin-button");
+      if (button) {
+        setCheckinButtonState(button, true);
+      }
+    });
   }
 
   async function checkIn(block, button, item) {
@@ -170,8 +188,7 @@
 
     const data = await response.json().catch(function () { return {}; });
     // created=false = 今天已经打过卡，接口幂等：照样显示已打卡，不报错
-    setCheckinButtonState(button, true);
-    item.classList.add("checked");
+    markCheckedEverywhere(block);
 
     if (data.created === false) {
       showMessage("这个任务今天已经打过卡了（不会重复计数）。", false);
@@ -184,16 +201,19 @@
   }
 
   // ---------------------------------------------------------------- 任务块：删除 / 改时间
-  async function deleteBlock(block) {
+  async function deleteBlock(block, button) {
     const ok = confirm("删除「" + block.title + "」这个时间块？");
     if (!ok) {
       return;
     }
 
+    button.disabled = true;
+
     let response;
     try {
       response = await fetch(API_BLOCK + block.id, { method: "DELETE" });
     } catch (error) {
+      button.disabled = false;
       showMessage("连不上后台，这个时间块没有删。", true);
       return;
     }
@@ -204,12 +224,20 @@
       return;
     }
 
+    const data = await response.json().catch(function () { return {}; });
+    button.disabled = false;
+
     if (response.status === 404) {
-      showMessage("删不了：后端还没有这个接口（等 C 推送），或这个块已经不存在。", true);
+      if (data.detail && data.detail !== "Not Found") {
+        // 块已经不存在（例如另一个标签页删掉了）：显示真实原因并刷新
+        showMessage(data.detail, true);
+        await loadPlan();
+      } else {
+        showMessage("删不了：后端还没有这个接口（等 C 推送）。", true);
+      }
       return;
     }
 
-    const data = await response.json().catch(function () { return {}; });
     showMessage(toChineseDetail(data, response.status), true);
   }
 
@@ -280,13 +308,19 @@
       }
 
       saveButton.disabled = false;
+      const data = await response.json().catch(function () { return {}; });
 
       if (response.status === 404 || response.status === 405) {
-        showMessage("后端还没有修改时间块的接口（等 C 推送）。", true);
+        if (data.detail && data.detail !== "Not Found") {
+          // 块已经不存在（例如另一个标签页删掉了）：显示真实原因并刷新
+          showMessage(data.detail, true);
+          await loadPlan();
+        } else {
+          showMessage("后端还没有修改时间块的接口（等 C 推送）。", true);
+        }
         return;
       }
 
-      const data = await response.json().catch(function () { return {}; });
       showMessage(toChineseDetail(data, response.status), true);
     });
 
@@ -316,6 +350,11 @@
 
     // 只有任务块能打卡；课和固定事件没有 task_id
     if (block.kind === "task" && block.task_id != null) {
+      // 同一个任务会同时渲染在「今天做什么」和「本周安排」，
+      // 用 data 属性标记，打卡后把两份都更新成已打卡。
+      item.setAttribute("data-task-id", String(block.task_id));
+      item.setAttribute("data-date", block.date);
+
       const checked = block.done === true;
       const button = document.createElement("button");
       button.type = "button";
@@ -349,7 +388,7 @@
       deleteButton.className = "block-action secondary outline";
       deleteButton.textContent = "删除";
       deleteButton.addEventListener("click", function () {
-        deleteBlock(block);
+        deleteBlock(block, deleteButton);
       });
 
       actions.appendChild(editButton);
@@ -625,11 +664,12 @@
       return;
     }
 
+    const week = weekStart;
     els.deletePlanButton.disabled = true;
 
     let response;
     try {
-      response = await fetch(API_PLAN + weekStart, { method: "DELETE" });
+      response = await fetch(API_PLAN + week, { method: "DELETE" });
     } catch (error) {
       els.deletePlanButton.disabled = false;
       showMessage("连不上后台，计划没有删。", true);
@@ -637,11 +677,28 @@
     }
 
     if (response.status === 204) {
-      showMessage("已删除本周计划，打卡也一起清掉了。", false);
-      showState("empty");
+      // 让在途的计划/统计请求作废，避免它们晚到把空状态又覆盖回旧数据
+      latestRequest += 1;
+      latestStatsRequest += 1;
+
+      if (week === weekStart) {
+        scheduledTaskIds = new Set();
+        showMessage("已删除本周计划，打卡也一起清掉了。", false);
+        showState("empty");
+        loadTasks();
+      } else {
+        showMessage("已删除 " + week + " 的计划。", false);
+        await loadPlan();
+      }
     } else if (response.status === 404) {
-      showMessage("这一周本来就没有计划。", true);
-      showState("empty");
+      if (week === weekStart) {
+        scheduledTaskIds = new Set();
+        showMessage("这一周本来就没有计划。", true);
+        showState("empty");
+        loadTasks();
+      } else {
+        showMessage("那一周本来就没有计划。", true);
+      }
     } else if (response.status === 405) {
       showMessage("后端还没有删除计划的接口（等 C 推送）。", true);
     } else {
@@ -693,12 +750,15 @@
 
     // 404 = 这一周还没生成过计划，这是正常的“空状态”
     if (response.status === 404) {
+      scheduledTaskIds = new Set();
       showState("empty");
+      loadTasks();
       return;
     }
 
     if (!response.ok) {
       const data = await response.json().catch(function () { return {}; });
+      if (requestId !== latestRequest) { return; }
       showError(toChineseDetail(data, response.status));
       return;
     }
