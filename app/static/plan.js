@@ -54,6 +54,8 @@
     taskDeadline: document.getElementById("task-deadline"),
     taskSubmit: document.getElementById("task-submit"),
     taskListBox: document.getElementById("task-list-box"),
+    taskListStatus: document.getElementById("task-list-status"),
+    taskListRetry: document.getElementById("task-list-retry"),
     taskList: document.getElementById("task-list")
   };
 
@@ -89,6 +91,7 @@
   let weekStart = mondayOf(new Date());
   let latestRequest = 0; // 防止快速切周时旧请求覆盖新结果
   let scheduledTaskIds = new Set(); // 本周计划里已经排上的任务 id（待排列表要排除它们）
+  const deletingBlockIds = new Set(); // 正在删除的块 id，防止同一块被点两次
 
   // 网址里带了 ?week=2026-11-16 就用它，刷新后还是这一周
   const query = new URLSearchParams(window.location.search);
@@ -103,6 +106,12 @@
     els.message.textContent = text;
     els.message.style.color = isError ? "#b42318" : "#2c7a4b";
     els.message.style.background = isError ? "#fef3f2" : "#ecfdf3";
+
+    // 手机上滚到表单/时间块时，顶部提示不在视野里。
+    // 出错时把提示条滚回屏幕中间，保证用户能看到中文原因。
+    if (isError) {
+      els.message.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
   }
 
   function showState(state) {
@@ -201,31 +210,49 @@
   }
 
   // ---------------------------------------------------------------- 任务块：删除 / 改时间
-  async function deleteBlock(block, button) {
+  function setBlockDeleteButtonsDisabled(blockId, disabled) {
+    const selector = '.block-item[data-block-id="' + blockId +
+      '"] .block-actions button:last-child';
+    document.querySelectorAll(selector).forEach(function (button) {
+      button.disabled = disabled;
+    });
+  }
+
+  async function deleteBlock(block) {
+    // 同一个块在「今天做什么」「本周安排」各有一个删除按钮，
+    // 用块 id 防重入，慢网络下连点两份也只发一次 DELETE。
+    if (deletingBlockIds.has(block.id)) {
+      return;
+    }
+
     const ok = confirm("删除「" + block.title + "」这个时间块？");
     if (!ok) {
       return;
     }
 
-    button.disabled = true;
+    deletingBlockIds.add(block.id);
+    setBlockDeleteButtonsDisabled(block.id, true);
 
     let response;
     try {
       response = await fetch(API_BLOCK + block.id, { method: "DELETE" });
     } catch (error) {
-      button.disabled = false;
+      deletingBlockIds.delete(block.id);
+      setBlockDeleteButtonsDisabled(block.id, false);
       showMessage("连不上后台，这个时间块没有删。", true);
       return;
     }
 
     if (response.status === 204) {
+      deletingBlockIds.delete(block.id);
       showMessage("已删除这个时间块。", false);
       await loadPlan();
       return;
     }
 
     const data = await response.json().catch(function () { return {}; });
-    button.disabled = false;
+    deletingBlockIds.delete(block.id);
+    setBlockDeleteButtonsDisabled(block.id, false);
 
     if (response.status === 404) {
       if (data.detail && data.detail !== "Not Found") {
@@ -354,6 +381,7 @@
       // 用 data 属性标记，打卡后把两份都更新成已打卡。
       item.setAttribute("data-task-id", String(block.task_id));
       item.setAttribute("data-date", block.date);
+      item.setAttribute("data-block-id", String(block.id));
 
       const checked = block.done === true;
       const button = document.createElement("button");
@@ -388,7 +416,7 @@
       deleteButton.className = "block-action secondary outline";
       deleteButton.textContent = "删除";
       deleteButton.addEventListener("click", function () {
-        deleteBlock(block, deleteButton);
+        deleteBlock(block);
       });
 
       actions.appendChild(editButton);
@@ -574,23 +602,42 @@
     return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) + "T23:59";
   }
 
+  function setTaskListStatus(text, isError) {
+    els.taskListStatus.hidden = false;
+    els.taskListStatus.textContent = text;
+    els.taskListStatus.style.color = isError ? "#b42318" : "#6b7280";
+    els.taskListRetry.hidden = !isError;
+  }
+
   async function loadTasks() {
     const requestId = latestTasksRequest + 1;
     latestTasksRequest = requestId;
 
     els.taskSection.hidden = false;
-    els.taskListBox.hidden = true;
+    els.taskListBox.hidden = false;
+    els.taskList.replaceChildren();
+    setTaskListStatus("正在加载待排任务…", false);
 
     let response;
     try {
       response = await fetch(API_TASKS);
     } catch (error) {
+      if (requestId !== latestTasksRequest) { return; }
+      setTaskListStatus("待排任务加载失败：连不上后台。", true);
       return;
     }
     if (requestId !== latestTasksRequest) { return; }
 
-    // 404/405 = C 的接口还没上：表单照常可用，列表先不显示
-    if (!response.ok) { return; }
+    if (!response.ok) {
+      const data = await response.json().catch(function () { return {}; });
+      if (requestId !== latestTasksRequest) { return; }
+      if (response.status === 404 || response.status === 405) {
+        setTaskListStatus("待排任务接口未上线（等 C 推送）。", true);
+      } else {
+        setTaskListStatus(toChineseDetail(data, response.status), true);
+      }
+      return;
+    }
 
     const data = await response.json();
     if (requestId !== latestTasksRequest) { return; }
@@ -599,9 +646,14 @@
     const pending = items.filter(function (task) {
       return !scheduledTaskIds.has(task.id);
     });
-    if (pending.length === 0) { return; }
 
-    els.taskList.replaceChildren();
+    if (pending.length === 0) {
+      setTaskListStatus("暂无待排任务（本周任务都已排进计划）。", false);
+      return;
+    }
+
+    els.taskListStatus.hidden = true;
+    els.taskListRetry.hidden = true;
     pending.forEach(function (task) {
       const li = document.createElement("li");
       const title = document.createElement("strong");
@@ -613,7 +665,6 @@
       li.appendChild(meta);
       els.taskList.appendChild(li);
     });
-    els.taskListBox.hidden = false;
   }
 
   async function submitTask(event) {
@@ -825,6 +876,7 @@
   });
   els.deletePlanButton.addEventListener("click", deletePlan);
   els.taskForm.addEventListener("submit", submitTask);
+  els.taskListRetry.addEventListener("click", loadTasks);
 
   // ---------------------------------------------------------------- 启动
   els.taskDeadline.value = defaultDeadline();

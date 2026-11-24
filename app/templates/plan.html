@@ -119,9 +119,11 @@
       <button type="submit" id="task-submit">添加任务</button>
     </form>
 
-    <div id="task-list-box" hidden>
+    <div id="task-list-box">
       <h4>待排任务</h4>
+      <p id="task-list-status" class="task-list-status" aria-live="polite">正在加载待排任务…</p>
       <ul id="task-list"></ul>
+      <button type="button" id="task-list-retry" class="secondary outline" hidden>重试</button>
       <p><small>点上面的「重新生成本周计划」就会把它们排进空档。</small></p>
     </div>
   </section>
