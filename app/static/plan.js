@@ -88,6 +88,7 @@
   // ---------------------------------------------------------------- 状态变量
   let weekStart = mondayOf(new Date());
   let latestRequest = 0; // 防止快速切周时旧请求覆盖新结果
+  let scheduledTaskIds = new Set(); // 本周计划里已经排上的任务 id（待排列表要排除它们）
 
   // 网址里带了 ?week=2026-11-16 就用它，刷新后还是这一周
   const query = new URLSearchParams(window.location.search);
@@ -454,6 +455,13 @@
     const blocks = data.blocks || [];
     const today = isoOf(new Date());
 
+    // 待排列表 = 任务列表 - 本周已经排上的任务
+    scheduledTaskIds = new Set(
+      blocks
+        .filter(function (block) { return block.kind === "task" && block.task_id != null; })
+        .map(function (block) { return block.task_id; })
+    );
+
     els.statScheduled.textContent = stats.scheduled == null ? 0 : stats.scheduled;
     els.statUnscheduled.textContent = stats.unscheduled == null ? 0 : stats.unscheduled;
 
@@ -549,10 +557,13 @@
     if (requestId !== latestTasksRequest) { return; }
 
     const items = Array.isArray(data) ? data : (Array.isArray(data.items) ? data.items : []);
-    if (items.length === 0) { return; }
+    const pending = items.filter(function (task) {
+      return !scheduledTaskIds.has(task.id);
+    });
+    if (pending.length === 0) { return; }
 
     els.taskList.replaceChildren();
-    items.forEach(function (task) {
+    pending.forEach(function (task) {
       const li = document.createElement("li");
       const title = document.createElement("strong");
       title.textContent = task.title;
