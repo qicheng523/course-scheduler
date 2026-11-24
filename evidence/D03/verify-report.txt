@@ -18,7 +18,7 @@ D3 验收报告（tools/verify_d03.py 自动生成）
 [C] C6 PASS 场景3 周六·只有课 → 1 整段  —— 1 段
 [C] C7 PASS 场景4 周六·课+固定事件 → 2 段  —— 2 段
 [C] C8 PASS 场景5 周日·课+固定事件 → 1 整段  —— 1 段
-[C] C9 PASS pytest 全绿且 ≥13 passed  —— passed=57 failed=0；57 passed in 2.99s
+[C] C9 PASS pytest 全绿且 ≥13 passed  —— passed=57 failed=0；57 passed in 3.00s
 [C] C10 PASS 真库（灌过 seed）周四 = 场景2 的 5 段
 [P] P1 PASS app/services/scheduler.py 存在
 [P] P2 PASS plan.py 里有 POST /api/plan/generate
